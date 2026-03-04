@@ -11,3 +11,10 @@ profiles/
 .env
 SERVER/.env
 *.log
+
+# Installer build artifacts
+installer/output/
+installer/nto-bot.ico
+installer/ntobot.exe
+installer/ntobot.cs
+ntobot.exe

@@ -100,11 +100,17 @@ export class AutomationService {
         data: { action: 'bot_started', provider: account.provider, accountId, details: `Bot started for "${account.name}"`, status: 'success' },
       });
 
-      // Launch browser (persistent profile - session may be saved)
-      onLog('Launching browser...');
+      // Read browser settings from database
+      const headlessSetting = await prisma.setting.findUnique({ where: { key: 'browser.headless' } });
+      const slowMoSetting = await prisma.setting.findUnique({ where: { key: 'browser.slowMo' } });
+      const headless = headlessSetting?.value === 'true';
+      const slowMo = slowMoSetting ? Number(slowMoSetting.value) : 100;
+
+      // Launch browser
+      onLog(`Launching browser (headless: ${headless})...`);
       const instance = await contextManager.launch(accountId, account.provider, {
-        headless: false,
-        slowMo: 100,
+        headless,
+        slowMo,
       });
 
       // Check if session is still valid (already logged in from saved profile)
@@ -112,11 +118,8 @@ export class AutomationService {
       await updateAccountStatus(accountId, 'logging_in');
       let isLoggedIn = false;
 
-      if (account.provider !== 'PAY4D') {
-        isLoggedIn = await checkExistingSession(instance.page, account.panelUrl, onLog, account.provider);
-      } else {
-        onLog('PAY4D requires fresh login, skipping session check');
-      }
+      // All providers: always fresh login
+      onLog('Fresh login required, skipping session check');
 
       if (isLoggedIn) {
         onLog('Session restored from saved profile!', 'success');

@@ -12,6 +12,7 @@
 - **Validation:** Zod schemas on all API inputs
 - **Excel Export:** ExcelJS
 - **Telegram:** Long-polling bot listener + send message/document/photo
+- **Installer:** Inno Setup 6 (.exe) + ntobot.exe (C# compiled launcher)
 
 ## Project Structure
 ```
@@ -59,6 +60,17 @@
 │       └── js/
 │           ├── api.js       # API client + WebSocket client class
 │           └── app.js       # Main SPA logic (~785 lines)
+├── installer/           # Windows installer (Inno Setup)
+│   ├── setup.iss        # Inno Setup script (compile to .exe)
+│   ├── compile.bat      # Build script (JPG→ICO + ISCC compile)
+│   ├── install.bat      # Standalone batch installer (no Inno Setup needed)
+│   ├── start.vbs        # Silent launcher (no CMD window)
+│   ├── start.bat        # Debug launcher (visible CMD)
+│   ├── stop.bat         # Kill server on port 6969
+│   ├── ff7acb18-*.jpg   # Logo source image
+│   ├── output/          # Built NTO-BOT-Setup.exe (gitignored)
+│   ├── ntobot.exe       # Compiled C# launcher (gitignored)
+│   └── nto-bot.ico      # Converted icon (gitignored)
 ├── data/                # Runtime data (gitignored)
 │   ├── bot-nto.db       # SQLite database
 │   ├── logs/            # Winston daily logs
@@ -78,6 +90,14 @@
 - `cd SERVER && npx prisma studio` - Open Prisma Studio
 - Root `npm run dev` also works (Windows only, case-insensitive `cd server`)
 
+## Installer
+- **Build:** Install [Inno Setup 6](https://jrsoftware.org/isdl.php), then run `installer\compile.bat`
+- **Output:** `installer\output\NTO-BOT-Setup.exe`
+- **What it does:** Checks/installs Node.js → copies files → npm install → prisma setup → playwright chromium → desktop shortcut
+- **Launcher:** `ntobot.exe` (C# compiled) — starts server hidden + opens browser
+- **All providers use fresh login** (no saved session reuse)
+- **Headless mode** respects `browser.headless` setting from database
+
 ## Database Models (Prisma)
 - **Account** - Provider accounts (provider, name, panelUrl, username, password, pinCode, status, lastNto, lastError, isActive)
 - **BotSession** - Bot run sessions (accountId, provider, status, startedAt, stoppedAt)
@@ -89,7 +109,7 @@
 ## Providers
 - **NUKE** - nukepanel.com (Ant Design UI). Fully implemented: login + OTP + NTO report scraping
 - **PAY4D** - pay4d panel (Bootstrap UI). Fully implemented: captcha login + PIN iframe + Win Lose All CSV
-- **VICTORY** - NOT IMPLEMENTED. Accounts can be created but bot start returns "not implemented"
+- **VICTORY** - victory panel. Implemented: login + NTO report scraping
 
 ## API Routes
 - `GET /api` - System info
@@ -113,7 +133,8 @@
 
 ## Architecture Notes
 - Section-based SPA navigation (show/hide divs, rendered by app.js)
-- Playwright persistent contexts save login sessions across restarts (NUKE benefits, PAY4D always re-logins)
+- All providers always perform fresh login (no saved session reuse)
+- Browser headless mode controlled by `browser.headless` database setting
 - `(global as any).wsBroadcast` used for WebSocket broadcasting across modules
 - Automation flows use fallback selector patterns (primary + fallback array)
 - PAY4D captcha solved via 2Captcha API, cost tracked in CaptchaUsage table
@@ -123,7 +144,5 @@
 ## Known Issues
 - Passwords/PINs stored plaintext in SQLite (ENCRYPTION_KEY exists in .env but unused)
 - Root tsconfig.json references non-existent folders (shared/, NUKE/, VICTORY/, PAY4D/)
-- No locking mechanism for concurrent Telegram NTO commands on same account
 - Telegram listener auto-closes browser after each command (wastes 2Captcha credits on PAY4D)
 - OTP waiting status has no timeout (browser stays open indefinitely)
-- VICTORY provider not implemented but selectable in UI
