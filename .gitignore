@@ -1,0 +1,13 @@
+node_modules/
+dist/
+data/*.db
+data/*.db-journal
+data/logs/
+data/screenshots/
+data/exports/
+data/downloads/
+data/captcha-debug/
+profiles/
+.env
+SERVER/.env
+*.log

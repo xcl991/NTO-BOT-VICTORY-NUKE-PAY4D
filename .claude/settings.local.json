@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:elysiajs.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:orm.drizzle.team)",
+      "Bash(bun install:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npx tsc:*)",
+      "Bash(timeout 8 npm run:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout 8 npx tsx:*)",
+      "Bash(npx tsx:*)",
+      "Bash(curl:*)",
+      "Bash(tasklist:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(sqlite3:*)",
+      "Bash(du:*)",
+      "Bash(xargs grep:*)",
+      "Bash(find .:*)"
+    ]
+  }
+}
