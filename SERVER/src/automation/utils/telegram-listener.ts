@@ -31,6 +31,28 @@ const PAY4D_CATEGORY_MAP: Record<string, Pay4dGameCategory> = {
   'GAMES': 'Togel',
 };
 
+// Per-account command queue to prevent concurrent operations on same account
+const accountQueues = new Map<string, Promise<void>>();
+
+/**
+ * Queue a command for an account. Commands on the same account run sequentially,
+ * commands on different accounts run in parallel.
+ */
+function queueForAccount(accountName: string, fn: () => Promise<void>): void {
+  const key = accountName.toLowerCase();
+  const prev = accountQueues.get(key) ?? Promise.resolve();
+
+  const next = prev.then(fn, fn); // run fn after previous completes (even if it failed)
+  accountQueues.set(key, next);
+
+  // Clean up entry when queue is empty
+  next.finally(() => {
+    if (accountQueues.get(key) === next) {
+      accountQueues.delete(key);
+    }
+  });
+}
+
 interface ParsedNtoCommand {
   accountName: string;
   gameCategory: string; // Raw category keyword from command (SLOT, SPORTS, etc.)
@@ -628,14 +650,18 @@ class TelegramListener {
       return;
     }
 
-    // Process async so we don't block the poll loop
-    processNtoCommand(chatId, messageId, command, senderName).catch(err => {
-      logger.error(`NTO command error: ${err}`);
-      sendTelegramMessageToChat(
-        chatId,
-        `❌ <b>Error:</b> ${err instanceof Error ? err.message : String(err)}`,
-        messageId,
-      ).catch(() => {});
+    // Queue per account — same account runs sequentially, different accounts run in parallel
+    queueForAccount(command.accountName, async () => {
+      try {
+        await processNtoCommand(chatId, messageId, command, senderName);
+      } catch (err) {
+        logger.error(`NTO command error: ${err}`);
+        await sendTelegramMessageToChat(
+          chatId,
+          `❌ <b>Error:</b> ${err instanceof Error ? err.message : String(err)}`,
+          messageId,
+        ).catch(() => {});
+      }
     });
   }
 }
