@@ -5,7 +5,7 @@ import { pay4dLoginFlow } from './flows/pay4d-login-flow';
 import { victoryLoginFlow } from './flows/victory-login-flow';
 import { nukeNtoCheckFlow, screenshotReportTable, type NtoCheckResult, type GameCategory } from './flows/nto-check-flow';
 import { pay4dNtoCheckFlow, screenshotPay4dResults, type Pay4dGameCategory } from './flows/pay4d-nto-check-flow';
-import { victoryNtoCheckFlow, screenshotVictoryResults } from './flows/victory-nto-check-flow';
+import { victoryNtoCheckFlow, screenshotVictoryResults, type VictoryGameCategory } from './flows/victory-nto-check-flow';
 import { NUKE_SELECTORS } from './selectors/nuke-selectors';
 import { VICTORY_SELECTORS } from './selectors/victory-selectors';
 import { exportNtoToExcel } from './utils/excel-export';
@@ -274,7 +274,7 @@ export class AutomationService {
     dateStart: string;        // DD-MM-YYYY
     dateEnd: string;          // DD-MM-YYYY
     usernames: string[];      // usernames to check
-    gameCategory: GameCategory | Pay4dGameCategory;
+    gameCategory: GameCategory | Pay4dGameCategory | VictoryGameCategory;
     maxPages?: number;
   }): Promise<NtoCheckResult> {
     const account = await prisma.account.findUnique({ where: { id: accountId } });
@@ -302,6 +302,7 @@ export class AutomationService {
           dateStart: options.dateStart,
           dateEnd: options.dateEnd,
           usernames: options.usernames,
+          gameCategory: (options.gameCategory as VictoryGameCategory) || 'SLOT',
           maxPages: options.maxPages,
         });
       } else {

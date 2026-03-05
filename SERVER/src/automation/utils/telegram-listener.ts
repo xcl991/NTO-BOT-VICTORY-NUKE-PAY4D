@@ -355,14 +355,9 @@ async function processNtoCommand(
   const automationService = await getAutomationService();
 
   // Map game category for the specific provider
-  // Victory has no game category filter — the category from the command is ignored
   const mappedCategory = provider === 'PAY4D'
     ? PAY4D_CATEGORY_MAP[command.gameCategory] || 'Slots'
     : command.gameCategory as GameCategory;
-
-  if (provider === 'VICTORY') {
-    onLog(`Victory has no game category filter, "${command.gameCategory}" will be ignored`);
-  }
 
   const result: NtoCheckResult = await automationService.checkNto(account.id, {
     dateStart: command.dateStart,
@@ -442,20 +437,20 @@ function formatResultMessage(
   msg += `Diminta: <b>${senderName}</b>\n\n`;
 
   if (provider === 'VICTORY') {
-    // Victory: only Username + Valid Bet
+    // Victory: Username + Valid Bet (summed from matching game category providers)
     msg += `<pre>`;
-    msg += `${'Username'.padEnd(16)} ${'Valid Bet'.padStart(15)}\n`;
-    msg += `${'─'.repeat(32)}\n`;
+    msg += `${'Username'.padEnd(16)} ${'Prov'.padStart(5)} ${'Valid Bet'.padStart(15)}\n`;
+    msg += `${'─'.repeat(38)}\n`;
 
     for (const r of rows) {
-      msg += `${r.username.substring(0, 15).padEnd(16)} ${r.userTO.padStart(15)}\n`;
+      msg += `${r.username.substring(0, 15).padEnd(16)} ${r.betCount.padStart(5)} ${r.userTO.padStart(15)}\n`;
     }
     msg += `</pre>`;
 
     const valid = rows.filter(r => r.userTO !== 'ERR');
     if (valid.length > 1) {
-      const totalValidBet = valid.reduce((s, r) => s + parseFloat(r.userTO.replace(/,/g, '') || '0'), 0);
-      msg += `\n<b>Total Valid Bet: ${totalValidBet.toLocaleString()}</b>`;
+      const totalValidBet = valid.reduce((s, r) => s + parseFloat(r.userTO.replace(/[.,]/g, (m) => m === '.' ? '' : '.') || '0'), 0);
+      msg += `\n<b>Total Valid Bet: ${totalValidBet.toLocaleString('id-ID')}</b>`;
     }
   } else if (provider === 'PAY4D') {
     // PAY4D: Username + Bet only

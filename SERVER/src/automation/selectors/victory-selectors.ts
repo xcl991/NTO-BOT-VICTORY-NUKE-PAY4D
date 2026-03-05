@@ -99,4 +99,30 @@ export const VICTORY_SELECTORS = {
     // --- No Data ---
     noDataMessage: '.MuiTableBody-root tr td[colspan]',
   },
+
+  // ===== DETAIL PAGE (by-player/{id} - provider/game category breakdown) =====
+  detail: {
+    tableContainer: '.MuiTableContainer-root',
+    tableBody: '.MuiTableBody-root, tbody.MuiTableBody-root',
+    tableRow: (n: number) => `[data-testid="tablerow-${n}"]`,
+
+    // Provider Name cell (e.g., "Pragmatic: Slots", "NLC: Slots")
+    cellProviderName: (n: number) => `[data-testid="tablerow-${n}-provider_name"]`,
+
+    // Bet Amount cell (contains span.MuiTypography-amount with the value)
+    cellBetAmount: (n: number) => `[data-testid="tablerow-${n}-bet_amount"]`,
+
+    // Valid Bet Amount cell
+    cellValidBetAmount: (n: number) => `[data-testid="tablerow-${n}-valid_bet_amount"]`,
+
+    // Player Win/Loss cell
+    cellPlayerWinLoss: (n: number) => `[data-testid="tablerow-${n}-player_winloss_amount"]`,
+
+    // Footer totals
+    footerBetAmount: '[data-testid="tablefooter-bet_amount"]',
+    footerValidBetAmount: '[data-testid="tablefooter-valid_bet_amount"]',
+
+    // Loading
+    loadingSpinner: '.MuiCircularProgress-root',
+  },
 } as const;

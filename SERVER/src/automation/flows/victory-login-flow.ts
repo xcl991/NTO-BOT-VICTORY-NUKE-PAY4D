@@ -28,7 +28,10 @@ export async function victoryLoginFlow(
     onLog(`Navigating to ${panelUrl}...`);
     await page.goto(panelUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
-    onLog('Page loaded');
+
+    // Set large viewport to show more content (like zoom out)
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    onLog('Page loaded (viewport 2560x1440)');
 
     // === Step 2: Fill Username ===
     onLog('Filling username...');

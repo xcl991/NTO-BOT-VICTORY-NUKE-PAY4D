@@ -93,6 +93,7 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\ntobot.exe"; WorkingDir: "{app}";
 Name: "{group}\{#MyAppName} (Debug)"; Filename: "{app}\start.bat"; WorkingDir: "{app}"; IconFilename: "{app}\nto-bot.ico"
 Name: "{group}\Stop {#MyAppName}"; Filename: "{app}\stop.bat"; WorkingDir: "{app}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\ntobot.exe"; WorkingDir: "{app}"; IconFilename: "{app}\nto-bot.ico"; Comment: "Auto-start NTO BOT on Windows login"
 
 [Run]
 ; Launch after install (checkbox on final page)

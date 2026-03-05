@@ -146,11 +146,15 @@ async function start() {
     console.log('');
     logger.info(`Server running on port ${PORT}`);
 
-    // Auto-start Telegram listener if enabled
+    // Auto-start Telegram listener if bot token and chat ID are configured
     try {
-      const setting = await prisma.setting.findUnique({ where: { key: 'notification.enabled' } });
-      if (setting?.value === 'true') {
+      const botToken = await prisma.setting.findUnique({ where: { key: 'notification.telegramBotToken' } });
+      const chatId = await prisma.setting.findUnique({ where: { key: 'notification.telegramChatId' } });
+      if (botToken?.value && chatId?.value) {
+        logger.info('Telegram config found, auto-starting listener...');
         telegramListener.start().catch(e => logger.warn(`Telegram listener start error: ${e}`));
+      } else {
+        logger.info('Telegram not configured, skipping auto-start');
       }
     } catch (e) {
       logger.warn(`Could not check Telegram auto-start setting: ${e}`);

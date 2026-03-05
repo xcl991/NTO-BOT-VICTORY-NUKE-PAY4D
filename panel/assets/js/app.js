@@ -607,6 +607,8 @@ async function loadSettings() {
           case 'captcha_api_key': setInput('settingCaptchaApiKey', s.value); if (s.value) load2CaptchaBalance(); break;
         }
       }
+      // Check Telegram listener status
+      checkTelegramStatus();
     }
     if (healthRes.success) {
       const uptime = Math.floor(healthRes.data.uptime);
@@ -623,6 +625,56 @@ window.saveSetting = async function(key, value) {
     await api.settings.update(key, value);
     showNotification('Setting saved', 'success', 1500);
   } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+};
+
+// ==================== TELEGRAM LISTENER ====================
+window.checkTelegramStatus = async function() {
+  const dot = document.getElementById('telegramStatusDot');
+  const text = document.getElementById('telegramStatusText');
+  const btn = document.getElementById('telegramToggleBtn');
+  if (!dot || !text || !btn) return;
+
+  try {
+    const res = await api.get('/settings/telegram/status');
+    if (res.success && res.data.running) {
+      dot.className = 'w-3 h-3 rounded-full bg-green-500 animate-pulse';
+      text.textContent = 'Running — listening for commands';
+      text.className = 'text-xs text-green-600';
+      btn.innerHTML = '<i class="fas fa-stop mr-1"></i>Stop';
+      btn.className = 'px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700';
+      btn.dataset.running = 'true';
+    } else {
+      dot.className = 'w-3 h-3 rounded-full bg-gray-400';
+      text.textContent = 'Stopped';
+      text.className = 'text-xs text-gray-500';
+      btn.innerHTML = '<i class="fas fa-play mr-1"></i>Start';
+      btn.className = 'px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700';
+      btn.dataset.running = 'false';
+    }
+  } catch (e) {
+    dot.className = 'w-3 h-3 rounded-full bg-red-500';
+    text.textContent = 'Error checking status';
+    text.className = 'text-xs text-red-500';
+  }
+};
+
+window.toggleTelegramListener = async function() {
+  const btn = document.getElementById('telegramToggleBtn');
+  const isRunning = btn?.dataset.running === 'true';
+
+  try {
+    if (isRunning) {
+      await api.post('/settings/telegram/stop');
+      showNotification('Telegram listener stopped', 'warning');
+    } else {
+      await api.post('/settings/telegram/start');
+      showNotification('Telegram listener started', 'success');
+    }
+    // Refresh status after toggle
+    setTimeout(checkTelegramStatus, 500);
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
 };
 
 window.load2CaptchaBalance = async function() {
