@@ -36,9 +36,12 @@
 │   │   │   │   ├── nto-check-flow.ts       # NUKE NTO scraping (report/overall, pagination)
 │   │   │   │   ├── pay4d-login-flow.ts     # PAY4D login (captcha + cross-origin PIN iframe)
 │   │   │   │   └── pay4d-nto-check-flow.ts # PAY4D Win Lose All (multiselect, CSV download+parse)
+│   │   │   │   ├── victory-login-flow.ts      # VICTORY login (username/password, MUI)
+│   │   │   │   └── victory-nto-check-flow.ts # VICTORY NTO (2-tab: by-player → detail → sum valid_bet by category)
 │   │   │   ├── selectors/
-│   │   │   │   ├── nuke-selectors.ts   # Ant Design component selectors
-│   │   │   │   └── pay4d-selectors.ts  # Bootstrap component selectors
+│   │   │   │   ├── nuke-selectors.ts      # Ant Design component selectors
+│   │   │   │   ├── pay4d-selectors.ts     # Bootstrap component selectors
+│   │   │   │   └── victory-selectors.ts   # MUI component selectors (report + detail page)
 │   │   │   └── utils/
 │   │   │       ├── captcha-solver.ts    # 2Captcha submit + poll + usage tracking
 │   │   │       ├── excel-export.ts      # ExcelJS NTO report export
@@ -95,8 +98,11 @@
 - **Output:** `installer\output\NTO-BOT-Setup.exe`
 - **What it does:** Checks/installs Node.js → copies files → npm install → prisma setup → playwright chromium → desktop shortcut
 - **Launcher:** `ntobot.exe` (C# compiled) — starts server hidden + opens browser
-- **All providers use fresh login** (no saved session reuse)
+- **NUKE** checks saved session via `/homepage` before login (skip login+OTP if still valid)
+- **PAY4D & VICTORY** always fresh login
 - **Headless mode** respects `browser.headless` setting from database
+- **Telegram listener** auto-starts on server boot if bot token + chat ID configured
+- **Windows Startup** shortcut created by installer for auto-launch on login
 
 ## Database Models (Prisma)
 - **Account** - Provider accounts (provider, name, panelUrl, username, password, pinCode, status, lastNto, lastError, isActive)
@@ -109,7 +115,7 @@
 ## Providers
 - **NUKE** - nukepanel.com (Ant Design UI). Fully implemented: login + OTP + NTO report scraping
 - **PAY4D** - pay4d panel (Bootstrap UI). Fully implemented: captcha login + PIN iframe + Win Lose All CSV
-- **VICTORY** - victory panel. Implemented: login + NTO report scraping
+- **VICTORY** - victory panel (MUI React SPA). Fully implemented: login + 2-tab NTO (by-player → detail page → filter by game category → sum valid_bet_amount)
 
 ## API Routes
 - `GET /api` - System info
@@ -133,8 +139,13 @@
 
 ## Architecture Notes
 - Section-based SPA navigation (show/hide divs, rendered by app.js)
-- All providers always perform fresh login (no saved session reuse)
+- NUKE: session check via `/homepage` (reuse saved profile if valid, else fresh login+OTP)
+- PAY4D & VICTORY: always fresh login (captcha/PIN required)
+- Victory NTO: 2-tab flow (click username → new tab with provider breakdown → filter by game category → sum valid_bet_amount)
+- Victory browser viewport set to 2560x1440 for better element visibility
 - Browser headless mode controlled by `browser.headless` database setting
+- Telegram listener auto-starts on boot when bot token + chat ID are configured in DB
+- Panel Settings has Telegram Listener toggle with live status indicator
 - `(global as any).wsBroadcast` used for WebSocket broadcasting across modules
 - Automation flows use fallback selector patterns (primary + fallback array)
 - PAY4D captcha solved via 2Captcha API, cost tracked in CaptchaUsage table
@@ -145,4 +156,21 @@
 - Passwords/PINs stored plaintext in SQLite (ENCRYPTION_KEY exists in .env but unused)
 - Root tsconfig.json references non-existent folders (shared/, NUKE/, VICTORY/, PAY4D/)
 - Telegram listener auto-closes browser after each command (wastes 2Captcha credits on PAY4D)
-- OTP waiting status has no timeout (browser stays open indefinitely)
+- OTP waiting_otp status has no timeout (browser stays open indefinitely)
+
+## Changelog
+
+### v1.0.1
+- Victory NTO: rewritten with 2-tab flow (click username → detail page → filter by game category → sum valid_bet_amount)
+- Victory now supports game category filtering (SLOT, CASINO, SPORTS, GAMES)
+- Victory browser viewport set to 2560x1440 for better visibility
+- NUKE session check: reuse saved login via `/homepage` check (skip OTP if still valid)
+- Telegram listener auto-starts on server boot when configured
+- Panel Settings: added Telegram Listener toggle with live status indicator
+- Installer: added Windows Startup shortcut for auto-launch on login
+
+### v1.0.0
+- Initial release with NUKE, PAY4D, VICTORY support
+- Telegram bot integration with NTO commands
+- 2Captcha integration for PAY4D
+- Inno Setup Windows installer with ntobot.exe launcher

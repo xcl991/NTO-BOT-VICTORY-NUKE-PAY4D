@@ -113,16 +113,31 @@ export class AutomationService {
         slowMo,
       });
 
-      // Check if session is still valid (already logged in from saved profile)
-      // PAY4D requires fresh login every time (captcha + PIN), skip session check
+      // Check if session is still valid for NUKE (saved profile)
+      // PAY4D & VICTORY always fresh login
       await updateAccountStatus(accountId, 'logging_in');
       let isLoggedIn = false;
 
-      // All providers: always fresh login
-      onLog('Fresh login required, skipping session check');
+      if (account.provider === 'NUKE') {
+        onLog('Checking saved session...');
+        try {
+          const baseUrl = account.panelUrl.replace(/\/+$/, '');
+          await instance.page.goto(`${baseUrl}/homepage`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          await instance.page.waitForTimeout(3000);
+          const currentUrl = instance.page.url();
+          // If still on /homepage, session is valid
+          if (currentUrl.includes('/homepage')) {
+            isLoggedIn = true;
+            onLog('Session still valid! Skipping login.', 'success');
+          } else {
+            onLog('Session expired, need to login');
+          }
+        } catch {
+          onLog('Session check failed, will login');
+        }
+      }
 
       if (isLoggedIn) {
-        onLog('Session restored from saved profile!', 'success');
         await updateAccountStatus(accountId, 'running');
         onLog('Bot is now running!', 'success');
         return;
