@@ -429,8 +429,18 @@
                 <input type="text" id="settingTelegramToken" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="123456:ABC-DEF..." onchange="saveSetting('notification.telegramBotToken', this.value)">
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID — NTO Group</label>
                 <input type="text" id="settingTelegramChatId" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="-100123456789" onchange="saveSetting('notification.telegramChatId', this.value)">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID — TARIK DB Group</label>
+                <input type="text" id="settingTelegramChatIdTarikDb" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="-100987654321" onchange="saveSetting('notification.telegramChatIdTarikDb', this.value)">
+                <p class="text-xs text-gray-400 mt-1">Kosong = TARIK DB command diterima di NTO group.</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Admin User IDs <span class="text-xs text-gray-400">(untuk approval TARIK DB)</span></label>
+                <input type="text" id="settingAdminUserIds" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="123456789, 987654321" onchange="saveAdminUserIds(this.value)">
+                <p class="text-xs text-gray-400 mt-1">Pisahkan dengan koma. Kosong = semua user dianggap admin.</p>
               </div>
               <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div class="flex items-center gap-3">

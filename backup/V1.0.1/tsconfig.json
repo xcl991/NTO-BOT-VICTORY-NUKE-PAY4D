@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@bot-nto/shared": ["./shared/src"],
+      "@bot-nto/shared/*": ["./shared/src/*"],
+      "@bot-nto/server": ["./SERVER/src"],
+      "@bot-nto/server/*": ["./SERVER/src/*"],
+      "@bot-nto/nuke": ["./NUKE/src"],
+      "@bot-nto/nuke/*": ["./NUKE/src/*"]
+    }
+  },
+  "include": ["shared/src", "SERVER/src", "NUKE/src", "VICTORY/src", "PAY4D/src"]
+}

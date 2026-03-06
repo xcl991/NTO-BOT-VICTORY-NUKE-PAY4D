@@ -143,13 +143,18 @@
 
 ## Telegram Bot Integration
 - Unified long-polling listener: `telegramListener` (handles both NTO + TARIK DB commands)
-- Single bot token + chat ID in settings (`notification.telegramBotToken`, `notification.telegramChatId`)
+- Single bot token: `notification.telegramBotToken`
+- Dual group support:
+  - `notification.telegramChatId` — NTO group (NTO commands only)
+  - `notification.telegramChatIdTarikDb` — TARIK DB group (TARIK DB commands only, optional — if empty, all commands accepted in NTO group)
 - **NTO command format:** `AccountName GAME NTO username1,username2 DD-MM-YYYY:DD-MM-YYYY`
   - Multi-line format also supported (usernames on separate lines)
   - Game categories: SLOT, SPORTS, CASINO, GAMES (mapped to provider-specific labels)
-- **TARIK DB command format (different from NTO — no game category, optional username):**
-  - Targeted: `Captain77 TARIK DB\nesia77\n01-03-2026:05-03-2026`
-  - General (all members): `Captain77 TARIK DB\n\n01-03-2026:05-03-2026`
+- **TARIK DB command format (different from NTO — no game category):**
+  - Date range (targeted): `Captain77 TARIK DB\nesia77\n01-03-2026:05-03-2026`
+  - Date range (all members): `Captain77 TARIK DB\n\n01-03-2026:05-03-2026`
+  - Old user (no dates): `Captain77 TARIK DB\nID1\nID2\nID3`
+- **Admin approval** for TARIK DB: non-admin users get inline keyboard (Approve/Cancel), admin identified by `notification.adminUserIds` (json array of Telegram user IDs). Empty = all users are admin.
 - Auto-starts bot if not running, runs check, replies with results + Excel
 
 ## Architecture Notes
@@ -191,7 +196,66 @@
 - Telegram listener auto-closes browser after each command (wastes 2Captcha credits on PAY4D)
 - OTP waiting_otp status has no timeout (browser stays open indefinitely)
 
+## Research / Planned
+
+### v1.2.0 (Implemented)
+- See `RESEARCH-V1.2.0-TARIKDB-APPROVAL-TARGETING.md` for full research with verified line numbers
+- **TARIK DB Admin Approval** — non-admin user di group Telegram harus dapat approval admin sebelum bot menjalankan TARIK DB
+  - Telegram inline keyboard (Approve/Cancel buttons) via `sendMessage` + `reply_markup`
+  - `callback_query` handling di listener (`answerCallbackQuery`, `editMessageText`)
+  - `allowed_updates` L878: add `'callback_query'` to existing `['message']`
+  - Admin identified by Telegram user ID: `notification.adminUserIds` (json array in DB Setting)
+  - Pending requests stored in-memory Map (requestId = `Date.now().toString(36)`)
+  - Admin kirim command → langsung execute (tanpa approval)
+  - Non-admin kirim command → kirim approval request → tunggu admin klik Approve/Cancel
+  - Empty adminUserIds = semua user dianggap admin (no approval needed)
+  - New functions in `telegram.ts`: `sendMessageWithKeyboard`, `answerCallbackQuery`, `editMessageText`
+  - callback_data max 64 bytes, format: `approve_tdb_{requestId}` / `cancel_tdb_{requestId}`
+- **Old User Targeting** — TARIK DB tanpa date range, cari user by username saja
+  - New Telegram command format (tanpa baris tanggal):
+    ```
+    HOLYPLAY TARIK DB
+    ID1
+    ID2
+    ID3
+    ```
+  - Parser update at `parseTarikDbCommand` L202: detect date line presence → `mode: 'date_range' | 'old_user'`
+  - NUKE: URL without `createdDate` params CONFIRMED WORKING (just `username.contains=xxx`)
+  - NUKE URL change at L61-66: wrap date params in `if (dateStart && dateEnd)`
+  - VICTORY: dates unconditional at L114-118 — must wrap in conditional
+  - Multi-username loop: per username di-query satu-satu, results digabung
+  - `dateStart`/`dateEnd` jadi optional di `checkTarikDb()` L398 dan semua flow
+  - NOT FOUND status for usernames with no results
+  - Backward compatible: format lama (dengan tanggal) tetap didukung 100%
+
 ## Changelog
+
+### v1.2.0
+- **TARIK DB Admin Approval** — non-admin users need admin approval before TARIK DB runs
+  - New Telegram inline keyboard with Approve/Cancel buttons
+  - `callback_query` handling in listener (`handleCallbackQuery` method)
+  - `allowed_updates` updated to `['message', 'callback_query']`
+  - Admin identified by Telegram user ID: `notification.adminUserIds` (json array in DB Setting)
+  - In-memory `pendingRequests` Map (keyed by `Date.now().toString(36)`)
+  - Admin sends command → direct execute; non-admin → approval request
+  - Empty adminUserIds = all users treated as admin (no approval)
+  - Private chat = always direct execute
+  - New functions in `telegram.ts`: `sendTelegramMessageWithKeyboard`, `answerCallbackQuery`, `editMessageText`
+- **Old User Targeting** — TARIK DB without date range, search by username only
+  - New Telegram command format: `AccountName TARIK DB\nID1\nID2\nID3` (no date line)
+  - `parseTarikDbCommand` detects date line presence → `mode: 'date_range' | 'old_user'`
+  - NUKE: URL without `createdDate` params (just `username.contains`)
+  - VICTORY: skip date pickers when no dates provided
+  - Multi-username loop: each username queried separately, results merged
+  - NOT FOUND status for usernames with no results
+  - Backward compatible: existing date-range format still works 100%
+- **Dual Telegram Groups** — separate chat IDs for NTO and TARIK DB
+  - `notification.telegramChatId` = NTO group (existing)
+  - `notification.telegramChatIdTarikDb` = TARIK DB group (new, optional)
+  - Bot monitors both groups, routes commands to correct group
+  - If TARIK DB chat ID not set, backward compatible (all commands in NTO group)
+  - TARIK DB scheduler sends results to TARIK DB group
+- **Panel Settings**: Admin User IDs + TARIK DB Chat ID fields
 
 ### v1.1.0
 - **Time-corrected TOTP generation** — CRITICAL FIX:

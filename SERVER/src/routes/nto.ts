@@ -10,14 +10,15 @@ const router = Router();
 
 // GET /api/nto - list NTO results with filters
 router.get('/', asyncHandler(async (req, res) => {
-  const { provider, accountId, limit } = req.query;
+  const { provider, accountId, limit, feature } = req.query;
   const where: any = {};
   if (provider) where.provider = String(provider);
   if (accountId) where.accountId = Number(accountId);
+  if (feature) where.account = { feature: String(feature) };
 
   const results = await prisma.ntoResult.findMany({
     where,
-    include: { account: { select: { name: true, provider: true } } },
+    include: { account: { select: { name: true, provider: true, feature: true } } },
     orderBy: { checkedAt: 'desc' },
     take: Number(limit) || 50,
   });

@@ -396,9 +396,10 @@ export class AutomationService {
    * VICTORY: navigates to /player/contact-data and scrapes contact data.
    */
   async checkTarikDb(accountId: number, options: {
-    dateStart: string;
-    dateEnd: string;
+    dateStart?: string;
+    dateEnd?: string;
     username?: string;
+    usernames?: string[];
     maxPages?: number;
   }): Promise<TarikDbCheckResult> {
     const account = await prisma.account.findUnique({ where: { id: accountId } });

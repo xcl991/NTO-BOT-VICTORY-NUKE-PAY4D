@@ -148,11 +148,9 @@ class TarikDbScheduler {
 
       onLog(`Starting H+1 check for ${accountIds.length} account(s), date: ${dateStr}`);
 
-      // Get Telegram config for sending results
+      // Get Telegram config for sending results (prefer TARIK DB group, fallback to NTO group)
       const telegramConfig = await getTelegramConfig();
-      const chatId = telegramConfig ? (
-        await prisma.setting.findUnique({ where: { key: 'notification.telegramChatId' } })
-      )?.value : null;
+      const chatId = telegramConfig ? (telegramConfig.chatIdTarikDb || telegramConfig.chatId) : null;
 
       const results: { accountName: string; count: number; success: boolean; error?: string }[] = [];
 

@@ -10,11 +10,13 @@ datasource db {
 model Account {
   id        Int      @id @default(autoincrement())
   provider  String   // NUKE, VICTORY, PAY4D
+  feature   String   @default("NTO") // NTO, TARIKDB
   name      String
   panelUrl  String
   username  String
   password  String
-  pinCode   String?
+  pinCode      String?
+  twoFaSecret  String?
   status    String   @default("idle") // idle, starting, logged_in, running, checking_nto, waiting_otp, error, stopped
   lastNto   String?
   lastError String?
@@ -29,6 +31,8 @@ model Account {
   @@index([status])
   @@index([provider, status])
   @@index([provider, isActive])
+  @@index([feature, provider])
+  @@index([feature, provider, isActive])
 }
 
 model BotSession {

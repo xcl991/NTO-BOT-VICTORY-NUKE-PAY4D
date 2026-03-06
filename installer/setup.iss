@@ -6,7 +6,7 @@
 ; ============================================
 
 #define MyAppName "NTO BOT"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "NTO BOT"
 #define MyAppURL "http://localhost:6969"
 #define MyAppExeName "start.vbs"
@@ -29,7 +29,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-VersionInfoVersion=1.1.0
+VersionInfoVersion=1.2.0
 VersionInfoCompany=NTO BOT
 VersionInfoDescription=NTO BOT Automation Dashboard Installer
 VersionInfoProductName=NTO BOT

@@ -57,7 +57,7 @@ export const NUKE_SELECTORS = {
     ],
   },
 
-  // ===== OTP INPUT (Google Authenticator code) =====
+  // ===== OTP INPUT (Google Authenticator code — single input) =====
   otpInput: {
     modal: '.ant-modal-content',
     input: 'input[placeholder*="OTP"], input[placeholder*="otp"], .ant-modal-content input.ant-input',
@@ -70,6 +70,20 @@ export const NUKE_SELECTORS = {
     submitButtonFallbacks: [
       '.ant-modal-content button[type="submit"]',
       '.ant-modal-footer button.ant-btn-primary',
+    ],
+  },
+
+  // ===== OTP 6-DIGIT INPUT (Google Authenticator — 6 individual fields) =====
+  otpSixDigit: {
+    modal: '.ant-modal-content',
+    title: '.ant-modal-title',
+    // 6 individual <input maxlength="1"> fields
+    inputs: 'input.antd-pro-app-cache-src-hocs-with-teapot-handler-components-styles-numberInput',
+    inputsFallback: '.ant-modal-content input[maxlength="1"]',
+    submitButton: '.ant-modal-footer button.ant-btn-primary',
+    submitButtonFallbacks: [
+      '.ant-modal-content button.ant-btn-primary',
+      'button:has-text("Submit")',
     ],
   },
 
@@ -170,5 +184,30 @@ export const NUKE_SELECTORS = {
     // --- Loading indicator ---
     tableLoading: '.ant-table-loading, .ant-spin-spinning',
     tablePlaceholder: '.ant-table-placeholder',
+  },
+  // ===== MEMBER MANAGEMENT PAGE =====
+  member: {
+    // Table selectors (same Ant Design table pattern as report page)
+    table: '.ant-table-bordered',
+    tableBody: '.ant-table-tbody',
+    tableRows: '.ant-table-tbody tr.ant-table-row',
+    // Columns (0-indexed): Id(0), Username(1), Name(2), Account Number(3),
+    // Referral(4), Wallet(5), Phone(6), Email(7), Referral Code(8),
+    // Join Date(9), Last Login(10), Last Login Ip(11), Source(12), Action(13)
+    cellId: 'td:nth-child(1)',       // Used for green color status detection
+    cellUsername: 'td:nth-child(2)',
+    cellWallet: 'td:nth-child(6)',
+    cellPhone: 'td:nth-child(7)',
+    cellJoinDate: 'td:nth-child(10)',
+    // Pagination (reuse same Ant Design pagination)
+    pagination: 'ul.ant-pagination',
+    paginationNext: '.ant-pagination-next',
+    paginationItem: (page: number) => `.ant-pagination-item[title="${page}"]`,
+    paginationTotal: '.ant-pagination-total-text',
+    // Page size changer
+    paginationSizeChanger: '.ant-pagination-options .ant-select',
+    // Loading
+    tableLoading: '.ant-table-loading, .ant-spin-spinning',
+    tablePlaceholder: '.ant-empty-description',
   },
 } as const;

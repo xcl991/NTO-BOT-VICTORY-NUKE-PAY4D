@@ -257,26 +257,38 @@ export async function handleMidSessionOtp(
 ): Promise<'handled' | 'no_otp' | 'needs_otp'> {
   const S = NUKE_SELECTORS;
   const MAX_OTP_ATTEMPTS = 3;
+  const OTP_DETECT_TIMEOUT = 5000;
 
-  // Check for OTP modal (6-digit or single-input)
+  // Wait for OTP modal to appear (may take a few seconds after page navigation)
+  onLog('Checking for 2FA/OTP modal...');
   let otpDetected = false;
+  let sixDigitInputs: Awaited<ReturnType<Page['$$']>> = [];
 
-  // Check 6-digit inputs
-  let sixDigitInputs = await page.$$(S.otpSixDigit.inputs);
-  if (sixDigitInputs.length < 6) {
-    sixDigitInputs = await page.$$(S.otpSixDigit.inputsFallback);
-  }
-  if (sixDigitInputs.length >= 6) {
-    otpDetected = true;
-  }
+  try {
+    // Wait for either 6-digit OTP inputs or single-input OTP modal
+    await Promise.race([
+      page.waitForSelector(S.otpSixDigit.inputsFallback, { timeout: OTP_DETECT_TIMEOUT, state: 'visible' }),
+      page.waitForSelector(S.otpInput.input, { timeout: OTP_DETECT_TIMEOUT, state: 'visible' }),
+    ]);
 
-  // Check single-input OTP modal
-  if (!otpDetected) {
-    const hasModal = await page.$(S.otpInput.modal);
-    if (hasModal) {
+    // Something appeared — now check which type
+    sixDigitInputs = await page.$$(S.otpSixDigit.inputs);
+    if (sixDigitInputs.length < 6) {
+      sixDigitInputs = await page.$$(S.otpSixDigit.inputsFallback);
+    }
+    if (sixDigitInputs.length >= 6) {
+      otpDetected = true;
+    }
+
+    // Check single-input OTP modal
+    if (!otpDetected) {
       const otpInputEl = await page.$(S.otpInput.input);
       if (otpInputEl) otpDetected = true;
     }
+  } catch {
+    // Timeout = no OTP modal appeared within 5 seconds
+    onLog('No 2FA/OTP modal detected (timeout)');
+    return 'no_otp';
   }
 
   if (!otpDetected) return 'no_otp';
@@ -354,9 +366,16 @@ export async function handleMidSessionOtp(
     await page.goto(memberUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(3000);
 
-    // Check if OTP modal reappears
-    const recheckInputs = await page.$$('.ant-modal-content input[maxlength="1"]');
-    const modalReappeared = recheckInputs.length >= 6;
+    // Check if OTP modal reappears (wait up to 5s for it)
+    let modalReappeared = false;
+    try {
+      await page.waitForSelector('.ant-modal-content input[maxlength="1"]', { timeout: 5000, state: 'visible' });
+      const recheckInputs = await page.$$('.ant-modal-content input[maxlength="1"]');
+      modalReappeared = recheckInputs.length >= 6;
+      if (modalReappeared) sixDigitInputs = recheckInputs;
+    } catch {
+      // Timeout = modal did NOT reappear = OTP was accepted
+    }
 
     if (!modalReappeared) {
       onLog('OTP verified! Modal did not reappear — OTP was accepted by server.', 'success');
@@ -370,9 +389,6 @@ export async function handleMidSessionOtp(
       onLog(`OTP failed after ${MAX_OTP_ATTEMPTS} attempts`, 'error');
       return 'needs_otp';
     }
-
-    // Re-detect inputs for next attempt
-    sixDigitInputs = recheckInputs;
   }
 
   return 'needs_otp';

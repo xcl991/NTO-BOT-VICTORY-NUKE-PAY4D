@@ -4,7 +4,7 @@
 ; ============================================
 
 #define MyAppName "BOT BO PANEL"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "BOT BO PANEL"
 #define MyAppURL "http://localhost:6969"
 #define MyAppExeName "botbopanel.exe"
@@ -27,7 +27,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-VersionInfoVersion=1.1.0
+VersionInfoVersion=1.2.0
 VersionInfoCompany=BOT BO PANEL
 VersionInfoDescription=BOT BO PANEL Automation Dashboard Installer
 VersionInfoProductName=BOT BO PANEL
@@ -91,7 +91,6 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\botbopanel.exe"; WorkingDir: "{ap
 Name: "{group}\{#MyAppName} (Debug)"; Filename: "{app}\start.bat"; WorkingDir: "{app}"; IconFilename: "{app}\botbopanel.ico"
 Name: "{group}\Stop {#MyAppName}"; Filename: "{app}\stop.bat"; WorkingDir: "{app}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\botbopanel.exe"; WorkingDir: "{app}"; IconFilename: "{app}\botbopanel.ico"; Comment: "Auto-start BOT BO PANEL on Windows login"
 
 [Run]
 Filename: "{app}\botbopanel.exe"; Description: "Launch BOT BO PANEL now"; Flags: postinstall nowait shellexec unchecked
@@ -261,6 +260,20 @@ begin
   end;
 end;
 
+procedure AddDefenderExclusion();
+var
+  ResultCode: Integer;
+  AppPath: String;
+begin
+  AppPath := ExpandConstant('{app}');
+  WizardForm.StatusLabel.Caption := 'Adding Windows Defender exclusion...';
+  WizardForm.FilenameLabel.Caption := AppPath;
+
+  Exec('powershell.exe',
+    '-ExecutionPolicy Bypass -Command "& { try { Add-MpPreference -ExclusionPath ''' + AppPath + ''' -ErrorAction SilentlyContinue } catch {} }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   InstallOK: Boolean;
@@ -273,6 +286,7 @@ begin
 
   if CurStep = ssPostInstall then
   begin
+    AddDefenderExclusion();
     CreateEnvFiles();
 
     if not VerifyFilesExtracted() then
@@ -305,9 +319,15 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
 begin
   if CurUninstallStep = usUninstall then
   begin
+    // Remove Windows Defender exclusion
+    Exec('powershell.exe',
+      '-ExecutionPolicy Bypass -Command "& { try { Remove-MpPreference -ExclusionPath ''' + ExpandConstant('{app}') + ''' -ErrorAction SilentlyContinue } catch {} }"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     if MsgBox(
       'Do you also want to delete all BOT BO PANEL data?' + #13#10 + #13#10 +
       'This includes:' + #13#10 +

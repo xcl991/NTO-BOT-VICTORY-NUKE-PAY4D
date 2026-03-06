@@ -8,6 +8,9 @@ import {
   getTelegramConfig,
   sendTelegramMessageToChat,
   sendTelegramDocumentToChat,
+  sendTelegramMessageWithKeyboard,
+  answerCallbackQuery,
+  editMessageText,
 } from './telegram';
 
 // Lazy import to avoid circular dependency
@@ -181,23 +184,33 @@ function isValidDate(ddmmyyyy: string): boolean {
 
 interface ParsedTarikDbCommand {
   accountName: string;
-  username?: string;     // Optional (empty = all members)
-  dateStart: string;     // DD-MM-YYYY
-  dateEnd: string;       // DD-MM-YYYY
+  mode: 'date_range' | 'old_user';
+  // date_range mode:
+  username?: string;     // Optional single username filter
+  dateStart?: string;    // DD-MM-YYYY (required for date_range)
+  dateEnd?: string;      // DD-MM-YYYY (required for date_range)
+  // old_user mode:
+  usernames?: string[];  // Multiple usernames (required for old_user)
 }
 
 /**
  * Parse a Telegram TARIK DB command.
  *
- * Targeted format (with username):
+ * Format 1 - Date Range (targeted, with username):
  *   Captain77 TARIK DB
  *   esia77
  *   01-03-2026:05-03-2026
  *
- * General format (no username):
+ * Format 2 - Date Range (general, no username):
  *   Captain77 TARIK DB
  *
  *   01-03-2026:05-03-2026
+ *
+ * Format 3 - Old User (no dates, multi-username):
+ *   Captain77 TARIK DB
+ *   ID1
+ *   ID2
+ *   ID3
  */
 function parseTarikDbCommand(text: string): ParsedTarikDbCommand | null {
   // Normalize text: split into lines (keep empty lines for parsing)
@@ -209,37 +222,51 @@ function parseTarikDbCommand(text: string): ParsedTarikDbCommand | null {
 
   const accountName = headerMatch[1];
 
-  // Find the date line (last non-empty line matching DD-MM-YYYY:DD-MM-YYYY)
+  // Find non-empty lines after header
   const nonEmptyLines = rawLines.filter(l => l.length > 0);
 
-  if (nonEmptyLines.length < 2) return null; // Need at least header + dates
+  if (nonEmptyLines.length < 2) return null; // Need at least header + something
 
+  // Check if last non-empty line is a date range
   const lastLine = nonEmptyLines[nonEmptyLines.length - 1];
   const dateMatch = lastLine.match(/^(\d{2}-\d{2}-\d{4}):(\d{2}-\d{2}-\d{4})$/);
-  if (!dateMatch) return null;
 
-  if (!isValidDate(dateMatch[1]) || !isValidDate(dateMatch[2])) return null;
+  if (dateMatch && isValidDate(dateMatch[1]) && isValidDate(dateMatch[2])) {
+    // === DATE RANGE MODE (existing flow) ===
+    let username: string | undefined;
+    if (nonEmptyLines.length >= 3) {
+      const middleLines = nonEmptyLines.slice(1, -1);
+      const usernames = middleLines
+        .flatMap(l => l.split(','))
+        .map(u => u.trim().toLowerCase())
+        .filter(u => u.length > 0);
+      if (usernames.length > 0) {
+        username = usernames[0];
+      }
+    }
 
-  // Middle lines = username (optional, only one username for targeted mode)
-  let username: string | undefined;
-  if (nonEmptyLines.length >= 3) {
-    // Lines between header and date are usernames (take the first one)
-    const middleLines = nonEmptyLines.slice(1, -1);
-    const usernames = middleLines
+    return {
+      accountName,
+      mode: 'date_range',
+      username,
+      dateStart: dateMatch[1],
+      dateEnd: dateMatch[2],
+    };
+  } else {
+    // === OLD USER MODE (no dates, all lines after header = usernames) ===
+    const usernames = nonEmptyLines.slice(1)
       .flatMap(l => l.split(','))
       .map(u => u.trim().toLowerCase())
       .filter(u => u.length > 0);
-    if (usernames.length > 0) {
-      username = usernames[0]; // TARIK DB only supports one username at a time
-    }
-  }
 
-  return {
-    accountName,
-    username,
-    dateStart: dateMatch[1],
-    dateEnd: dateMatch[2],
-  };
+    if (usernames.length === 0) return null; // Need at least 1 username
+
+    return {
+      accountName,
+      mode: 'old_user',
+      usernames,
+    };
+  }
 }
 
 // ============================================================
@@ -269,7 +296,8 @@ async function processTarikDbCommand(
   }
 
   const provider = account.provider;
-  const dateDisplay = `${command.dateStart} s/d ${command.dateEnd}`;
+  const isOldUser = command.mode === 'old_user';
+  const dateDisplay = isOldUser ? 'Old User' : `${command.dateStart} s/d ${command.dateEnd}`;
 
   const broadcast = (global as any).wsBroadcast;
   const onLog = (msg: string, level: string = 'info') => {
@@ -345,18 +373,23 @@ async function processTarikDbCommand(
   }
 
   // Send acknowledgment
-  const mode = command.username ? `Username: <b>${command.username}</b>` : '<b>Semua member</b>';
+  let ackInfo: string;
+  if (isOldUser) {
+    ackInfo = `Mode: <b>Old User</b>\nTarget: <b>${command.usernames!.join(', ')}</b>`;
+  } else {
+    const modeLabel = command.username ? `Username: <b>${command.username}</b>` : '<b>Semua member</b>';
+    ackInfo = `${modeLabel}\nTanggal: <b>${dateDisplay}</b>`;
+  }
   await sendTelegramMessageToChat(
     chatId,
     `⏳ <b>TARIK DB dimulai</b>\n` +
     `Account: <b>${account.name}</b> (${provider})\n` +
-    `${mode}\n` +
-    `Tanggal: <b>${dateDisplay}</b>\n\n` +
+    `${ackInfo}\n\n` +
     `Mohon tunggu, sedang memproses...`,
     messageId,
   );
 
-  onLog(`TARIK DB command from ${senderName}: ${command.username || 'ALL'} ${dateDisplay}`);
+  onLog(`TARIK DB command from ${senderName}: ${isOldUser ? `old_user [${command.usernames!.join(',')}]` : `${command.username || 'ALL'} ${dateDisplay}`}`);
 
   // === Run TARIK DB check ===
   const automationService = await getAutomationService();
@@ -365,7 +398,8 @@ async function processTarikDbCommand(
     dateStart: command.dateStart,
     dateEnd: command.dateEnd,
     username: command.username,
-    maxPages: 10,
+    usernames: command.usernames,
+    maxPages: isOldUser ? 1 : 10,
   });
 
   // Format and send results
@@ -411,19 +445,21 @@ export function formatTarikDbResultMessage(
   accountName: string,
   provider: string,
 ): string {
-  // Sort: REGIS + DEPO first, then REGIS ONLY
+  const isOldUser = command.mode === 'old_user';
+
+  // Sort: REGIS + DEPO first, then REGIS ONLY, then NOT FOUND
   const sorted = [...rows].sort((a, b) => {
-    const aDepo = a.status.includes('DEPO') ? 0 : 1;
-    const bDepo = b.status.includes('DEPO') ? 0 : 1;
-    return aDepo - bDepo;
+    const priority = (s: string) => s.includes('DEPO') ? 0 : s.includes('NOT FOUND') ? 2 : 1;
+    return priority(a.status) - priority(b.status);
   });
 
   const regisDepoCount = sorted.filter(r => r.status.includes('DEPO')).length;
-  const regisOnlyCount = sorted.length - regisDepoCount;
+  const notFoundCount = sorted.filter(r => r.status.includes('NOT FOUND')).length;
+  const regisOnlyCount = sorted.length - regisDepoCount - notFoundCount;
 
-  let msg = `📊 <b>TARIK DB Report</b>\n`;
+  let msg = `📊 <b>TARIK DB Report${isOldUser ? ' (Old User)' : ''}</b>\n`;
   msg += `Account: <b>${accountName}</b> (${provider})\n`;
-  msg += `Tanggal: <b>${dateDisplay}</b>\n`;
+  if (!isOldUser) msg += `Tanggal: <b>${dateDisplay}</b>\n`;
   if (command.username) msg += `Username: <b>${command.username}</b>\n`;
   msg += `Diminta: <b>${senderName}</b>\n\n`;
 
@@ -433,7 +469,9 @@ export function formatTarikDbResultMessage(
   }
 
   msg += `✅ <b>${regisDepoCount}</b> REGIS+DEPO\n`;
-  msg += `⚪ <b>${regisOnlyCount}</b> REGIS ONLY\n\n`;
+  msg += `⚪ <b>${regisOnlyCount}</b> REGIS ONLY\n`;
+  if (notFoundCount > 0) msg += `❓ <b>${notFoundCount}</b> NOT FOUND\n`;
+  msg += `\n`;
 
   msg += `<pre>`;
   msg += `${'Username'.padEnd(16)} ${'Phone'.padEnd(15)} ${'Status'.padEnd(14)}\n`;
@@ -442,7 +480,7 @@ export function formatTarikDbResultMessage(
   const maxShow = Math.min(sorted.length, 50);
   for (let i = 0; i < maxShow; i++) {
     const r = sorted[i];
-    const statusShort = r.status.includes('DEPO') ? 'REGIS+DEPO' : 'REGIS ONLY';
+    const statusShort = r.status.includes('DEPO') ? 'REGIS+DEPO' : r.status.includes('NOT FOUND') ? 'NOT FOUND' : 'REGIS ONLY';
     msg += `${r.username.substring(0, 15).padEnd(16)} ${r.phone.substring(0, 14).padEnd(15)} ${statusShort.padEnd(14)}\n`;
   }
 
@@ -789,10 +827,26 @@ function formatResultMessage(
 // Telegram Long Polling Listener
 // ============================================================
 
+// Pending TARIK DB approval request
+interface PendingTarikDbRequest {
+  accountName: string;
+  usernames?: string[];
+  username?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  mode: 'date_range' | 'old_user';
+  requestedBy: { id: number; username: string; firstName: string };
+  requestedAt: Date;
+  messageId: number;
+  chatId: number | string;
+  originalMessageId: number;
+}
+
 class TelegramListener {
   private running = false;
   private offset = 0;
   private abortController: AbortController | null = null;
+  private pendingRequests = new Map<string, PendingTarikDbRequest>();
 
   async start(): Promise<void> {
     if (this.running) {
@@ -875,7 +929,7 @@ class TelegramListener {
       body: JSON.stringify({
         offset: this.offset,
         timeout: 30,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
       }),
       signal: this.abortController.signal,
     });
@@ -896,9 +950,199 @@ class TelegramListener {
     for (const update of updates) {
       this.offset = update.update_id + 1;
 
-      if (update.message?.text) {
+      if (update.callback_query) {
+        await this.handleCallbackQuery(update.callback_query);
+      } else if (update.message?.text) {
         await this.handleMessage(update.message);
       }
+    }
+  }
+
+  /**
+   * Get admin user IDs from database setting.
+   * Empty array = all users are admin (no approval needed).
+   */
+  private async getAdminUserIds(): Promise<number[]> {
+    try {
+      const setting = await prisma.setting.findUnique({ where: { key: 'notification.adminUserIds' } });
+      if (!setting?.value) return [];
+      const parsed = JSON.parse(setting.value);
+      return Array.isArray(parsed) ? parsed.map(Number).filter(n => !isNaN(n)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Handle inline keyboard callback queries (Approve/Cancel for TARIK DB).
+   */
+  private async handleCallbackQuery(callbackQuery: any): Promise<void> {
+    const config = await getTelegramConfig();
+    if (!config) return;
+
+    const userId = callbackQuery.from?.id;
+    const chatId = callbackQuery.message?.chat?.id;
+    const messageId = callbackQuery.message?.message_id;
+    const callbackData = callbackQuery.data as string;
+    const clickerName = callbackQuery.from?.first_name || callbackQuery.from?.username || 'Unknown';
+
+    if (!callbackData || !chatId || !messageId) return;
+
+    // Parse callback data: "approve_tdb_XXXXX" or "cancel_tdb_XXXXX"
+    const parts = callbackData.split('_');
+    if (parts.length < 3 || parts[1] !== 'tdb') return;
+
+    const action = parts[0]; // "approve" or "cancel"
+    const requestId = parts.slice(2).join('_'); // rejoin in case requestId has underscores
+
+    // Check admin authorization
+    const adminIds = await this.getAdminUserIds();
+    if (adminIds.length > 0 && !adminIds.includes(userId)) {
+      await answerCallbackQuery(config.botToken, callbackQuery.id, 'Hanya admin yang bisa approve/cancel', true);
+      return;
+    }
+
+    const pending = this.pendingRequests.get(requestId);
+    if (!pending) {
+      await answerCallbackQuery(config.botToken, callbackQuery.id, 'Request sudah expired atau sudah diproses', true);
+      return;
+    }
+
+    if (action === 'approve') {
+      await answerCallbackQuery(config.botToken, callbackQuery.id, 'Approved! Processing...', false);
+      await editMessageText(
+        chatId,
+        messageId,
+        `✅ <b>TARIK DB Approved</b> oleh <b>${clickerName}</b>\n\n` +
+        `Account: <b>${pending.accountName}</b>\n` +
+        `Mode: <b>${pending.mode === 'old_user' ? 'Old User' : 'Date Range'}</b>\n` +
+        `Processing...`,
+      );
+
+      this.pendingRequests.delete(requestId);
+
+      // Build command and execute
+      const command: ParsedTarikDbCommand = {
+        accountName: pending.accountName,
+        mode: pending.mode,
+        username: pending.username,
+        usernames: pending.usernames,
+        dateStart: pending.dateStart,
+        dateEnd: pending.dateEnd,
+      };
+
+      const senderName = pending.requestedBy.firstName || pending.requestedBy.username || 'Unknown';
+
+      queueForAccount(command.accountName, async () => {
+        try {
+          await processTarikDbCommand(pending.chatId, pending.originalMessageId, command, senderName);
+        } catch (err) {
+          logger.error(`Approved TARIKDB command error: ${err}`);
+          await sendTelegramMessageToChat(
+            pending.chatId,
+            `❌ <b>Error:</b> ${err instanceof Error ? err.message : String(err)}`,
+            pending.originalMessageId,
+          ).catch(() => {});
+        }
+      });
+
+    } else if (action === 'cancel') {
+      await answerCallbackQuery(config.botToken, callbackQuery.id, 'Cancelled', false);
+      await editMessageText(
+        chatId,
+        messageId,
+        `❌ <b>TARIK DB Cancelled</b> oleh <b>${clickerName}</b>\n\n` +
+        `Account: <b>${pending.accountName}</b>\n` +
+        `Request dari: <b>${pending.requestedBy.firstName}</b>`,
+      );
+      this.pendingRequests.delete(requestId);
+    }
+  }
+
+  /**
+   * Send an approval request message with Approve/Cancel inline keyboard.
+   */
+  private async sendApprovalRequest(
+    chatId: number | string,
+    originalMessageId: number,
+    command: ParsedTarikDbCommand,
+    from: any,
+  ): Promise<void> {
+    const requestId = Date.now().toString(36);
+    const senderName = from?.first_name || from?.username || 'Unknown';
+    const senderUsername = from?.username ? `@${from.username}` : senderName;
+
+    let targetInfo: string;
+    if (command.mode === 'old_user') {
+      targetInfo = `Mode: <b>Old User</b>\nTarget: <b>${command.usernames!.join(', ')}</b>`;
+    } else {
+      const dateDisplay = `${command.dateStart} s/d ${command.dateEnd}`;
+      targetInfo = `Mode: <b>Date Range</b>\nTanggal: <b>${dateDisplay}</b>`;
+      if (command.username) targetInfo += `\nUsername: <b>${command.username}</b>`;
+    }
+
+    const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+    const text =
+      `🔐 <b>TARIK DB Request</b>\n\n` +
+      `Dari: <b>${senderUsername}</b> (ID: ${from?.id})\n` +
+      `Waktu: <b>${now}</b>\n` +
+      `Account: <b>${command.accountName}</b>\n` +
+      `${targetInfo}\n\n` +
+      `<i>Menunggu approval admin...</i>`;
+
+    const result = await sendTelegramMessageWithKeyboard(
+      text,
+      [[
+        { text: '✅ Approve', callback_data: `approve_tdb_${requestId}` },
+        { text: '❌ Cancel', callback_data: `cancel_tdb_${requestId}` },
+      ]],
+      chatId,
+      originalMessageId,
+    );
+
+    if (result.ok && result.messageId) {
+      this.pendingRequests.set(requestId, {
+        accountName: command.accountName,
+        usernames: command.usernames,
+        username: command.username,
+        dateStart: command.dateStart,
+        dateEnd: command.dateEnd,
+        mode: command.mode,
+        requestedBy: {
+          id: from?.id || 0,
+          username: from?.username || '',
+          firstName: from?.first_name || '',
+        },
+        requestedAt: new Date(),
+        messageId: result.messageId,
+        chatId,
+        originalMessageId,
+      });
+
+      logger.info(`TARIK DB approval request created: ${requestId} from ${senderName}`);
+    }
+  }
+
+  /**
+   * Check if a chat ID matches the configured group for a command type.
+   * If no specific chat ID is configured, allow from any group.
+   */
+  private async isChatAllowed(chatId: number | string, commandType: 'NTO' | 'TARIKDB'): Promise<boolean> {
+    const config = await getTelegramConfig();
+    if (!config) return false;
+
+    const chatIdStr = String(chatId);
+
+    if (commandType === 'NTO') {
+      // NTO: must be from NTO group (notification.telegramChatId)
+      // If no TARIK DB chat ID configured, allow NTO from any group (backward compat)
+      if (!config.chatIdTarikDb) return true;
+      return chatIdStr === config.chatId;
+    } else {
+      // TARIK DB: must be from TARIK DB group (notification.telegramChatIdTarikDb)
+      // If no TARIK DB chat ID configured, allow from NTO group (backward compat)
+      if (!config.chatIdTarikDb) return chatIdStr === config.chatId;
+      return chatIdStr === config.chatIdTarikDb;
     }
   }
 
@@ -924,6 +1168,11 @@ class TelegramListener {
 
     // Route: TARIK DB keyword first (more specific), then NTO
     if (upper.includes('TARIKDB') || upper.includes('TARIK DB') || upper.includes('TARIK')) {
+      // Check if this chat is allowed for TARIK DB commands
+      if (!(await this.isChatAllowed(chatId, 'TARIKDB'))) {
+        logger.debug(`TARIK DB command ignored from chat ${chatId} (wrong group)`);
+        return;
+      }
       logger.info(`Telegram [TARIKDB] command from ${senderName}: "${cleanText}"`);
 
       const tarikCommand = parseTarikDbCommand(cleanText);
@@ -931,28 +1180,48 @@ class TelegramListener {
         await sendTelegramMessageToChat(
           chatId,
           `❌ <b>Format tidak valid.</b>\n\n` +
-          `<b>Format 1 (targeted):</b>\n` +
+          `<b>Format 1 (targeted + tanggal):</b>\n` +
           `<code>Captain77 TARIK DB\nesia77\n01-03-2026:05-03-2026</code>\n\n` +
-          `<b>Format 2 (semua member):</b>\n` +
-          `<code>Captain77 TARIK DB\n\n01-03-2026:05-03-2026</code>`,
+          `<b>Format 2 (semua member + tanggal):</b>\n` +
+          `<code>Captain77 TARIK DB\n\n01-03-2026:05-03-2026</code>\n\n` +
+          `<b>Format 3 (old user, tanpa tanggal):</b>\n` +
+          `<code>Captain77 TARIK DB\nID1\nID2\nID3</code>`,
           messageId,
         );
         return;
       }
 
-      queueForAccount(tarikCommand.accountName, async () => {
-        try {
-          await processTarikDbCommand(chatId, messageId, tarikCommand, senderName);
-        } catch (err) {
-          logger.error(`TARIKDB command error: ${err}`);
-          await sendTelegramMessageToChat(
-            chatId,
-            `❌ <b>Error:</b> ${err instanceof Error ? err.message : String(err)}`,
-            messageId,
-          ).catch(() => {});
-        }
-      });
+      // Check admin approval requirement
+      const adminIds = await this.getAdminUserIds();
+      const senderId = message.from?.id;
+      const isAdmin = adminIds.length === 0 || adminIds.includes(senderId);
+      const isPrivateChat = message.chat.type === 'private';
+
+      if (isAdmin || isPrivateChat) {
+        // Admin or private chat: execute directly
+        queueForAccount(tarikCommand.accountName, async () => {
+          try {
+            await processTarikDbCommand(chatId, messageId, tarikCommand, senderName);
+          } catch (err) {
+            logger.error(`TARIKDB command error: ${err}`);
+            await sendTelegramMessageToChat(
+              chatId,
+              `❌ <b>Error:</b> ${err instanceof Error ? err.message : String(err)}`,
+              messageId,
+            ).catch(() => {});
+          }
+        });
+      } else {
+        // Non-admin in group: send approval request
+        await this.sendApprovalRequest(chatId, messageId, tarikCommand, message.from);
+      }
     } else if (upper.includes('NTO')) {
+      // Check if this chat is allowed for NTO commands
+      if (!(await this.isChatAllowed(chatId, 'NTO'))) {
+        logger.debug(`NTO command ignored from chat ${chatId} (wrong group)`);
+        return;
+      }
+
       logger.info(`Telegram [NTO] command from ${senderName}: "${cleanText}"`);
 
       const command = parseNtoCommand(cleanText);

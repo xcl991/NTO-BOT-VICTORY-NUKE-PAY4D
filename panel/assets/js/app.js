@@ -677,6 +677,14 @@ async function loadSettings() {
           case 'nto.checkInterval': setInput('settingCheckInterval', s.value); break;
           case 'notification.telegramBotToken': setInput('settingTelegramToken', s.value); break;
           case 'notification.telegramChatId': setInput('settingTelegramChatId', s.value); break;
+          case 'notification.telegramChatIdTarikDb': setInput('settingTelegramChatIdTarikDb', s.value); break;
+          case 'notification.adminUserIds': {
+            try {
+              const ids = JSON.parse(s.value || '[]');
+              setInput('settingAdminUserIds', Array.isArray(ids) ? ids.join(', ') : '');
+            } catch { setInput('settingAdminUserIds', ''); }
+            break;
+          }
           case 'captcha_api_key': setInput('settingCaptchaApiKey', s.value); if (s.value) load2CaptchaBalance(); break;
         }
       }
@@ -697,6 +705,14 @@ window.saveSetting = async function(key, value) {
   try {
     await api.settings.update(key, value);
     showNotification('Setting saved', 'success', 1500);
+  } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+};
+
+window.saveAdminUserIds = async function(value) {
+  try {
+    const ids = value.split(',').map(s => s.trim()).filter(s => s.length > 0).map(Number).filter(n => !isNaN(n));
+    await api.settings.update('notification.adminUserIds', JSON.stringify(ids), 'json');
+    showNotification(`Admin User IDs saved (${ids.length} ID)`, 'success', 1500);
   } catch (e) { showNotification('Error: ' + e.message, 'error'); }
 };
 

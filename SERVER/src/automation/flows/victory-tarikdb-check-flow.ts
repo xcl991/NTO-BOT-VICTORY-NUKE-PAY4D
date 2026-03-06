@@ -22,35 +22,66 @@ export async function victoryTarikDbCheckFlow(
   panelUrl: string,
   onLog: LogCallback,
   options: {
-    dateStart: string;     // DD-MM-YYYY
-    dateEnd: string;       // DD-MM-YYYY
-    username?: string;     // Optional: specific username filter
+    dateStart?: string;    // DD-MM-YYYY (optional for old_user mode)
+    dateEnd?: string;      // DD-MM-YYYY (optional for old_user mode)
+    username?: string;     // Optional: specific username filter (date_range mode)
+    usernames?: string[];  // Multiple usernames (old_user mode)
     maxPages?: number;     // Default 10
   },
 ): Promise<TarikDbCheckResult> {
+  const isOldUser = !options.dateStart || !options.dateEnd;
+
   try {
     // === Navigate to contact-data page ===
     const baseUrl = panelUrl.replace(/\/+$/, '').replace(/\/login\/?$/, '');
     const contactUrl = `${baseUrl}/player/contact-data`;
 
-    onLog(`Navigating to contact-data: ${options.dateStart} s/d ${options.dateEnd}`);
+    onLog(`Navigating to contact-data${isOldUser ? ' (Old User mode)' : `: ${options.dateStart} s/d ${options.dateEnd}`}`);
     await page.goto(contactUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
 
     await page.setViewportSize({ width: 2560, height: 1440 });
     onLog('Contact data page loaded (viewport 2560x1440)');
 
-    // === Cycle 1: REGIS ONLY (Non Deposit) ===
+    // === OLD USER MODE: Loop per username ===
+    if (isOldUser && options.usernames && options.usernames.length > 0) {
+      const allRows: TarikDbRow[] = [];
+
+      for (let i = 0; i < options.usernames.length; i++) {
+        const uname = options.usernames[i];
+        onLog(`[${i + 1}/${options.usernames.length}] Searching: ${uname}`);
+
+        // Run 2-cycle for each username
+        const cycleOpts = { ...options, username: uname };
+
+        onLog(`--- Cycle 1 (${uname}): NON DEPOSIT ---`);
+        const regisOnly = await runFilterCycle(page, onLog, cycleOpts, false);
+
+        onLog(`--- Cycle 2 (${uname}): DEPOSIT ---`);
+        const regisDepo = await runFilterCycle(page, onLog, cycleOpts, true);
+
+        if (regisDepo.length > 0 || regisOnly.length > 0) {
+          allRows.push(...regisDepo, ...regisOnly);
+          onLog(`"${uname}": ${regisDepo.length} REGIS+DEPO, ${regisOnly.length} REGIS ONLY`, 'success');
+        } else {
+          allRows.push({ username: uname, wallet: '-', phone: '-', status: 'NOT FOUND', joinDate: '-' });
+          onLog(`"${uname}": not found`, 'warning');
+        }
+      }
+
+      onLog(`Old User TARIK DB complete! ${allRows.length} result(s) from ${options.usernames.length} username(s)`, 'success');
+      return { success: true, rows: allRows, totalItems: allRows.length };
+    }
+
+    // === DATE RANGE MODE (existing flow) ===
     onLog('--- CYCLE 1: Fetching NON DEPOSIT (REGIS ONLY) ---');
     const regisOnlyRows = await runFilterCycle(page, onLog, options, false);
     onLog(`Cycle 1 result: ${regisOnlyRows.length} REGIS ONLY`);
 
-    // === Cycle 2: REGIS + DEPO (Deposit) ===
     onLog('--- CYCLE 2: Fetching DEPOSIT (REGIS + DEPO) ---');
     const regisDepoRows = await runFilterCycle(page, onLog, options, true);
     onLog(`Cycle 2 result: ${regisDepoRows.length} REGIS + DEPO`);
 
-    // === Merge: REGIS+DEPO first, then REGIS ONLY ===
     const allRows = [...regisDepoRows, ...regisOnlyRows];
 
     onLog(`TARIK DB complete! ${allRows.length} member(s) (${regisDepoRows.length} REGIS+DEPO, ${regisOnlyRows.length} REGIS ONLY)`, 'success');
@@ -70,10 +101,11 @@ export async function victoryTarikDbCheckFlow(
 async function runFilterCycle(
   page: Page,
   onLog: LogCallback,
-  options: { dateStart: string; dateEnd: string; username?: string; maxPages?: number },
+  options: { dateStart?: string; dateEnd?: string; username?: string; maxPages?: number },
   isDeposit: boolean,
 ): Promise<TarikDbRow[]> {
   const statusLabel = isDeposit ? 'REGIS + DEPO' : 'REGIS ONLY';
+  const hasDates = !!(options.dateStart && options.dateEnd);
 
   // 1. Set deposit_status dropdown
   try {
@@ -92,36 +124,40 @@ async function runFilterCycle(
     onLog(`Deposit status set failed: ${err instanceof Error ? err.message : err}`, 'warning');
   }
 
-  // 2. Set "Filter Date By" to "Registered Date"
-  try {
-    const filterDateEl = await page.$(S.contactData.filterDateBySelect);
-    if (filterDateEl) {
-      const currentText = await filterDateEl.textContent();
-      if (!currentText?.includes('Registered Date')) {
-        await filterDateEl.click();
-        await page.waitForTimeout(500);
-        await page.click(S.contactData.registeredDateOption, { timeout: 5000 });
-        await page.waitForTimeout(500);
-        await page.keyboard.press('Escape');
-        onLog('Filter date by: Registered Date');
+  // 2. Set "Filter Date By" to "Registered Date" (only if we have dates)
+  if (hasDates) {
+    try {
+      const filterDateEl = await page.$(S.contactData.filterDateBySelect);
+      if (filterDateEl) {
+        const currentText = await filterDateEl.textContent();
+        if (!currentText?.includes('Registered Date')) {
+          await filterDateEl.click();
+          await page.waitForTimeout(500);
+          await page.click(S.contactData.registeredDateOption, { timeout: 5000 });
+          await page.waitForTimeout(500);
+          await page.keyboard.press('Escape');
+          onLog('Filter date by: Registered Date');
+        }
       }
+    } catch (err) {
+      onLog(`Filter date by set failed: ${err instanceof Error ? err.message : err}`, 'warning');
     }
-  } catch (err) {
-    onLog(`Filter date by set failed: ${err instanceof Error ? err.message : err}`, 'warning');
+
+    // 3. Fill date range
+    const startParts = parseDateParts(options.dateStart!);
+    const endParts = parseDateParts(options.dateEnd!);
+    await setMuiDatePicker(page, S.contactData.startDate, S.contactData.startDateFallbacks, startParts, onLog);
+    await setMuiDatePicker(page, S.contactData.endDate, S.contactData.endDateFallbacks, endParts, onLog);
+    await page.waitForTimeout(500);
   }
 
-  // 3. Fill date range
-  const startParts = parseDateParts(options.dateStart);
-  const endParts = parseDateParts(options.dateEnd);
-  await setMuiDatePicker(page, S.contactData.startDate, S.contactData.startDateFallbacks, startParts, onLog);
-  await setMuiDatePicker(page, S.contactData.endDate, S.contactData.endDateFallbacks, endParts, onLog);
-  await page.waitForTimeout(500);
-
-  // 4. (Optional) username filter
+  // 4. Username filter (clear + fill)
   if (options.username) {
     try {
       const usernameInput = await page.$(S.contactData.usernameInput);
       if (usernameInput) {
+        await usernameInput.fill('');
+        await page.waitForTimeout(200);
         await usernameInput.fill(options.username);
         await page.waitForTimeout(300);
       }

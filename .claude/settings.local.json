@@ -22,7 +22,31 @@
       "Bash(sqlite3:*)",
       "Bash(du:*)",
       "Bash(xargs grep:*)",
-      "Bash(find .:*)"
+      "Bash(find .:*)",
+      "Bash(cd:*)",
+      "Bash(powershell:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(ls:*)",
+      "Bash(xxd:*)",
+      "Bash(test:*)",
+      "Bash(node:*)",
+      "Bash(# Kill any running server netstat -ano)",
+      "Bash(while read pid)",
+      "Bash(do taskkill //F //PID $pid)",
+      "Bash(done echo \"Server killed \\(if was running\\)\")",
+      "Bash(\"/c/Program Files \\(x86\\)/Inno Setup 6/ISCC.exe\":*)",
+      "Bash(mkdir:*)",
+      "Bash(npm ls:*)",
+      "Bash(/dev/null:*)",
+      "WebFetch(domain:playwright.dev)",
+      "Bash(\"C:\\\\Windows\\\\Microsoft.NET\\\\Framework64\\\\v4.0.30319\\\\csc.exe\":*)",
+      "WebFetch(domain:browser-use.com)",
+      "WebFetch(domain:coryrylan.com)",
+      "WebFetch(domain:www.theautomatedtester.co.uk)",
+      "WebFetch(domain:2fa.live)",
+      "Read(//c/Program Files \\(x86\\)/Inno Setup 6/**)",
+      "Read(//c/Program Files/Inno Setup 6/**)",
+      "WebFetch(domain:core.telegram.org)"
     ]
   }
 }

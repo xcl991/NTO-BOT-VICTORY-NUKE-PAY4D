@@ -42,28 +42,85 @@ export async function nukeTarikDbCheckFlow(
   panelUrl: string,
   onLog: LogCallback,
   options: {
-    dateStart: string;     // DD-MM-YYYY
-    dateEnd: string;       // DD-MM-YYYY
-    username?: string;     // Optional: specific username to search
+    dateStart?: string;    // DD-MM-YYYY (optional for old_user mode)
+    dateEnd?: string;      // DD-MM-YYYY (optional for old_user mode)
+    username?: string;     // Optional: specific username to search (date_range mode)
+    usernames?: string[];  // Multiple usernames (old_user mode)
     maxPages?: number;     // Default 10
     twoFaSecret?: string;  // TOTP secret for auto-OTP if 2FA modal appears
   },
 ): Promise<TarikDbCheckResult> {
   const allRows: TarikDbRow[] = [];
+  const isOldUser = !options.dateStart || !options.dateEnd;
 
   try {
-    // === Step 1: Build member management URL ===
     const baseUrl = panelUrl.replace(/\/+$/, '');
-    const startDateUtc = toUtcIso(options.dateStart, false);
-    const endDateUtc = toUtcIso(options.dateEnd, true);
+    const PAGE_SIZE = isOldUser ? 40 : 100;
 
-    const PAGE_SIZE = 100;
-    let memberUrl = `${baseUrl}/management/member?page=0&size=${PAGE_SIZE}&roleUser.equals=true` +
-      `&createdDate.greaterThanOrEqual=${encodeURIComponent(startDateUtc)}` +
-      `&createdDate.lessThanOrEqual=${encodeURIComponent(endDateUtc)}`;
+    // === Build base member URL ===
+    let memberUrl = `${baseUrl}/management/member?page=0&size=${PAGE_SIZE}&roleUser.equals=true`;
+
+    if (options.dateStart && options.dateEnd) {
+      const startDateUtc = toUtcIso(options.dateStart, false);
+      const endDateUtc = toUtcIso(options.dateEnd, true);
+      memberUrl += `&createdDate.greaterThanOrEqual=${encodeURIComponent(startDateUtc)}`;
+      memberUrl += `&createdDate.lessThanOrEqual=${encodeURIComponent(endDateUtc)}`;
+    }
 
     if (options.username) {
       memberUrl += `&username.contains=${encodeURIComponent(options.username)}`;
+    }
+
+    // === OLD USER MODE: Loop per username ===
+    if (isOldUser && options.usernames && options.usernames.length > 0) {
+      onLog(`Old User mode: searching ${options.usernames.length} username(s)`);
+
+      // First load to handle OTP
+      const firstUrl = `${baseUrl}/management/member?page=0&size=${PAGE_SIZE}&roleUser.equals=true` +
+        `&username.contains=${encodeURIComponent(options.usernames[0])}`;
+      await page.goto(firstUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2500);
+
+      const otpHandled = await handleMidSessionOtp(page, onLog, options.twoFaSecret);
+      if (otpHandled === 'needs_otp') {
+        return { success: false, rows: [], error: 'OTP 2FA diperlukan. Tambahkan 2FA Secret di account settings atau submit OTP manual.' };
+      }
+
+      for (let i = 0; i < options.usernames.length; i++) {
+        const uname = options.usernames[i];
+        onLog(`[${i + 1}/${options.usernames.length}] Searching: ${uname}`);
+
+        const url = `${baseUrl}/management/member?page=0&size=${PAGE_SIZE}&roleUser.equals=true` +
+          `&username.contains=${encodeURIComponent(uname)}`;
+
+        await navigateToMemberPage(page, url, onLog);
+
+        // Handle OTP if it reappears
+        const otpCheck = await handleMidSessionOtp(page, onLog, options.twoFaSecret);
+        if (otpCheck === 'needs_otp') {
+          allRows.push({ username: uname, wallet: '-', phone: '-', status: 'ERROR', joinDate: '-' });
+          continue;
+        }
+
+        await waitForMemberTableLoad(page, onLog);
+
+        const pageRows = await scrapeMemberPage(page);
+
+        if (pageRows.length > 0) {
+          allRows.push(...pageRows);
+          onLog(`"${uname}": ${pageRows.length} result(s)`, 'success');
+        } else {
+          allRows.push({ username: uname, wallet: '-', phone: '-', status: 'NOT FOUND', joinDate: '-' });
+          onLog(`"${uname}": not found`, 'warning');
+        }
+      }
+
+      onLog(`Old User TARIK DB complete! ${allRows.length} result(s) from ${options.usernames.length} username(s)`, 'success');
+      return { success: true, rows: allRows, totalItems: allRows.length };
+    }
+
+    // === DATE RANGE MODE (existing flow) ===
+    if (options.username) {
       onLog(`Navigating to member page (username: ${options.username})`);
     } else {
       onLog(`Navigating to member page (all members)`);
@@ -72,7 +129,7 @@ export async function nukeTarikDbCheckFlow(
     onLog(`Date range: ${options.dateStart} s/d ${options.dateEnd}`);
     onLog(`URL: ${memberUrl}`);
 
-    // === Step 1: First load (initializes SPA + handles OTP if needed) ===
+    // First load (initializes SPA + handles OTP if needed)
     await page.goto(memberUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2500);
     onLog('Member page loaded (1st load)');
@@ -83,8 +140,7 @@ export async function nukeTarikDbCheckFlow(
       return { success: false, rows: [], error: 'OTP 2FA diperlukan. Tambahkan 2FA Secret di account settings atau submit OTP manual.' };
     }
 
-    // === Step 1b: Second load of page=0 — ensures SPA properly applies date filters ===
-    // NUKE SPA often ignores URL date params on first load (especially after OTP redirect).
+    // Second load of page=0 — ensures SPA properly applies date filters
     onLog('Re-loading page=0 to ensure date filters apply...');
     await navigateToMemberPage(page, memberUrl, onLog);
 
@@ -94,10 +150,10 @@ export async function nukeTarikDbCheckFlow(
       return { success: false, rows: [], error: 'OTP 2FA diperlukan setelah re-navigate.' };
     }
 
-    // === Step 2: Wait for table ===
+    // Wait for table
     await waitForMemberTableLoad(page, onLog);
 
-    // === Step 3: Check for empty results ===
+    // Check for empty results
     const emptyEl = await page.$(NUKE_SELECTORS.member.tablePlaceholder);
     if (emptyEl) {
       const emptyText = await emptyEl.textContent();
@@ -105,14 +161,13 @@ export async function nukeTarikDbCheckFlow(
       return { success: true, rows: [], totalItems: 0 };
     }
 
-    // === Step 4: Scrape all pages via direct URL navigation ===
+    // Scrape all pages via direct URL navigation
     const maxPages = options.maxPages ?? 10;
-    let currentPage = 0; // 0-indexed
+    let currentPage = 0;
 
-    // Parse date range for post-scrape filtering (DD-MM-YYYY → Date objects)
-    const filterStartDate = parseDdMmYyyy(options.dateStart);
-    const filterEndDate = parseDdMmYyyy(options.dateEnd);
-    // End date is inclusive (end of day)
+    // Parse date range for post-scrape filtering
+    const filterStartDate = parseDdMmYyyy(options.dateStart!);
+    const filterEndDate = parseDdMmYyyy(options.dateEnd!);
     if (filterEndDate) filterEndDate.setHours(23, 59, 59, 999);
 
     while (currentPage < maxPages) {
@@ -120,7 +175,6 @@ export async function nukeTarikDbCheckFlow(
 
       if (pageRows.length === 0) break;
 
-      // Filter rows: only include rows with JoinDate within the requested date range
       const filtered = filterRowsByDate(pageRows, filterStartDate, filterEndDate);
       allRows.push(...filtered);
 
@@ -130,10 +184,8 @@ export async function nukeTarikDbCheckFlow(
         onLog(`Page ${currentPage + 1}: scraped ${pageRows.length} row(s) (total: ${allRows.length})`);
       }
 
-      // Less than PAGE_SIZE rows = last page
       if (pageRows.length < PAGE_SIZE) break;
 
-      // Navigate to next page via URL (not click) to preserve date params
       currentPage++;
       const nextUrl = memberUrl.replace('page=0', `page=${currentPage}`);
       onLog(`Page ${currentPage + 1} URL: ${nextUrl}`);
@@ -257,26 +309,38 @@ export async function handleMidSessionOtp(
 ): Promise<'handled' | 'no_otp' | 'needs_otp'> {
   const S = NUKE_SELECTORS;
   const MAX_OTP_ATTEMPTS = 3;
+  const OTP_DETECT_TIMEOUT = 5000;
 
-  // Check for OTP modal (6-digit or single-input)
+  // Wait for OTP modal to appear (may take a few seconds after page navigation)
+  onLog('Checking for 2FA/OTP modal...');
   let otpDetected = false;
+  let sixDigitInputs: Awaited<ReturnType<Page['$$']>> = [];
 
-  // Check 6-digit inputs
-  let sixDigitInputs = await page.$$(S.otpSixDigit.inputs);
-  if (sixDigitInputs.length < 6) {
-    sixDigitInputs = await page.$$(S.otpSixDigit.inputsFallback);
-  }
-  if (sixDigitInputs.length >= 6) {
-    otpDetected = true;
-  }
+  try {
+    // Wait for either 6-digit OTP inputs or single-input OTP modal
+    await Promise.race([
+      page.waitForSelector(S.otpSixDigit.inputsFallback, { timeout: OTP_DETECT_TIMEOUT, state: 'visible' }),
+      page.waitForSelector(S.otpInput.input, { timeout: OTP_DETECT_TIMEOUT, state: 'visible' }),
+    ]);
 
-  // Check single-input OTP modal
-  if (!otpDetected) {
-    const hasModal = await page.$(S.otpInput.modal);
-    if (hasModal) {
+    // Something appeared — now check which type
+    sixDigitInputs = await page.$$(S.otpSixDigit.inputs);
+    if (sixDigitInputs.length < 6) {
+      sixDigitInputs = await page.$$(S.otpSixDigit.inputsFallback);
+    }
+    if (sixDigitInputs.length >= 6) {
+      otpDetected = true;
+    }
+
+    // Check single-input OTP modal
+    if (!otpDetected) {
       const otpInputEl = await page.$(S.otpInput.input);
       if (otpInputEl) otpDetected = true;
     }
+  } catch {
+    // Timeout = no OTP modal appeared within 5 seconds
+    onLog('No 2FA/OTP modal detected (timeout)');
+    return 'no_otp';
   }
 
   if (!otpDetected) return 'no_otp';
@@ -354,9 +418,16 @@ export async function handleMidSessionOtp(
     await page.goto(memberUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(3000);
 
-    // Check if OTP modal reappears
-    const recheckInputs = await page.$$('.ant-modal-content input[maxlength="1"]');
-    const modalReappeared = recheckInputs.length >= 6;
+    // Check if OTP modal reappears (wait up to 5s for it)
+    let modalReappeared = false;
+    try {
+      await page.waitForSelector('.ant-modal-content input[maxlength="1"]', { timeout: 5000, state: 'visible' });
+      const recheckInputs = await page.$$('.ant-modal-content input[maxlength="1"]');
+      modalReappeared = recheckInputs.length >= 6;
+      if (modalReappeared) sixDigitInputs = recheckInputs;
+    } catch {
+      // Timeout = modal did NOT reappear = OTP was accepted
+    }
 
     if (!modalReappeared) {
       onLog('OTP verified! Modal did not reappear — OTP was accepted by server.', 'success');
@@ -370,9 +441,6 @@ export async function handleMidSessionOtp(
       onLog(`OTP failed after ${MAX_OTP_ATTEMPTS} attempts`, 'error');
       return 'needs_otp';
     }
-
-    // Re-detect inputs for next attempt
-    sixDigitInputs = recheckInputs;
   }
 
   return 'needs_otp';

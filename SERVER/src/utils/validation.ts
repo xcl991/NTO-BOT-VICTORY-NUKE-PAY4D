@@ -2,14 +2,17 @@ import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 
 const providerEnum = z.enum(['NUKE', 'VICTORY', 'PAY4D']);
+const featureEnum = z.enum(['NTO', 'TARIKDB']);
 
 export const createAccountSchema = z.object({
   provider: providerEnum,
+  feature: featureEnum.optional().default('NTO'),
   name: z.string().min(1, 'Name is required').max(100),
   panelUrl: z.string().url('Must be a valid URL'),
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
   pinCode: z.string().optional(),
+  twoFaSecret: z.string().optional(),
 });
 
 export const updateAccountSchema = z.object({
@@ -18,6 +21,7 @@ export const updateAccountSchema = z.object({
   username: z.string().min(1).optional(),
   password: z.string().min(1).optional(),
   pinCode: z.string().optional(),
+  twoFaSecret: z.string().optional(),
 });
 
 export const botStartSchema = z.object({

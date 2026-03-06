@@ -6,13 +6,15 @@ import logger from '../utils/logger';
 
 const router = Router();
 
-// GET /api/accounts - list all (with optional ?provider= filter)
+// GET /api/accounts - list all (with optional ?provider= and ?feature= filter)
 router.get('/', asyncHandler(async (req, res) => {
-  const { provider } = req.query;
-  const where = provider ? { provider: String(provider) } : {};
+  const { provider, feature } = req.query;
+  const where: any = {};
+  if (provider) where.provider = String(provider);
+  if (feature) where.feature = String(feature);
   const accounts = await prisma.account.findMany({
     where,
-    select: { id: true, provider: true, name: true, panelUrl: true, username: true, pinCode: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
+    select: { id: true, provider: true, feature: true, name: true, panelUrl: true, username: true, pinCode: true, twoFaSecret: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ success: true, data: accounts });
@@ -22,7 +24,7 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const account = await prisma.account.findUnique({
     where: { id: Number(req.params.id) },
-    select: { id: true, provider: true, name: true, panelUrl: true, username: true, pinCode: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
+    select: { id: true, provider: true, feature: true, name: true, panelUrl: true, username: true, pinCode: true, twoFaSecret: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
   });
   if (!account) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Account not found' } });
   res.json({ success: true, data: account });
@@ -30,9 +32,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
 // POST /api/accounts
 router.post('/', validate(createAccountSchema), asyncHandler(async (req, res) => {
-  const { provider, name, panelUrl, username, password, pinCode } = req.body;
+  const { provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret } = req.body;
   const account = await prisma.account.create({
-    data: { provider, name, panelUrl, username, password, pinCode },
+    data: { provider, feature: feature || 'NTO', name, panelUrl, username, password, pinCode, twoFaSecret },
   });
   await prisma.activityLog.create({
     data: { action: 'account_created', provider, accountId: account.id, details: `Account "${name}" created`, status: 'success' },
@@ -41,7 +43,7 @@ router.post('/', validate(createAccountSchema), asyncHandler(async (req, res) =>
   // Broadcast via WebSocket
   const broadcast = (global as any).wsBroadcast;
   if (broadcast) broadcast({ type: 'ACCOUNT_CREATED', data: { id: account.id, provider, name } });
-  res.status(201).json({ success: true, data: { id: account.id, provider, name, panelUrl, username, status: account.status } });
+  res.status(201).json({ success: true, data: { id: account.id, provider, feature: account.feature, name, panelUrl, username, status: account.status } });
 }));
 
 // PUT /api/accounts/:id
