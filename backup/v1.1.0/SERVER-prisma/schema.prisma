@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id        Int      @id @default(autoincrement())
+  provider  String   // NUKE, VICTORY, PAY4D
+  feature   String   @default("NTO") // NTO, TARIKDB
+  name      String
+  panelUrl  String
+  username  String
+  password  String
+  pinCode      String?
+  twoFaSecret  String?
+  status    String   @default("idle") // idle, starting, logged_in, running, checking_nto, waiting_otp, error, stopped
+  lastNto   String?
+  lastError String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions   BotSession[]
+  ntoResults NtoResult[]
+
+  @@index([provider])
+  @@index([status])
+  @@index([provider, status])
+  @@index([provider, isActive])
+  @@index([feature, provider])
+  @@index([feature, provider, isActive])
+}
+
+model BotSession {
+  id        Int       @id @default(autoincrement())
+  accountId Int
+  provider  String
+  status    String    @default("starting")
+  lastError String?
+  startedAt DateTime  @default(now())
+  stoppedAt DateTime?
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([provider])
+  @@index([status])
+}
+
+model NtoResult {
+  id        Int      @id @default(autoincrement())
+  accountId Int
+  provider  String
+  value     String
+  rawData   String?
+  checkedAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([provider])
+  @@index([checkedAt])
+  @@index([provider, checkedAt])
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  provider  String?
+  accountId Int?
+  details   String?
+  status    String   @default("info") // info, success, warning, error
+  createdAt DateTime @default(now())
+
+  @@index([provider])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+  type  String @default("string") // string, number, boolean, json
+
+  @@index([key])
+}
+
+model CaptchaUsage {
+  id            Int      @id @default(autoincrement())
+  balanceBefore Float
+  balanceAfter  Float
+  cost          Float
+  captchaId     String?
+  result        String?
+  accountId     Int?
+  provider      String?
+  status        String   @default("success") // success, failed
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([accountId])
+}
