@@ -171,7 +171,7 @@
 - NUKE TARIK DB: scrapes `/management/member` page filtered by createdDate range + optional `username.contains`, extracts Username/Wallet/Phone/Status/JoinDate columns
 - NUKE TARIK DB Status detection: green color `rgb(3, 170, 20)` or `#03aa14` on ID cell → "REGIS + DEPO", else → "REGIS ONLY"
 - TARIK DB results sorted: REGIS+DEPO first, then REGIS ONLY (matching Python reference)
-- Victory TARIK DB: scrapes `/player/contact-data` page filtered by Registered Date, extracts Username+Phone, page size 1000, pagination via Next button
+- Victory TARIK DB: 2-cycle scraping on `/player/contact-data` — Cycle 1: `deposit_status=false` → REGIS ONLY, Cycle 2: `deposit_status=true` → REGIS + DEPO, merged (DEPO first)
 - Account `feature` field (`NTO` or `TARIKDB`) controls which Telegram listener processes commands for that account
 - TARIK DB Scheduler: auto-check H+1 (yesterday) daily at configurable time
   - Settings: `tarikdb.scheduler.enabled` (boolean), `tarikdb.scheduler.time` (HH:MM), `tarikdb.scheduler.accountIds` (json array)
@@ -211,11 +211,14 @@
   4. `pressSequentially` — Playwright Locator keyboard typing
   - Submit button enabled check after each strategy to verify React/rc-form state updated
   - Retry up to 3 attempts with page navigate between attempts
-- **Victory TARIK DB**: scrape `/player/contact-data` page (MUI) for member contact data
-  - New file: `victory-tarikdb-check-flow.ts` — filters by Registered Date, page size 1000
-  - Scrapes Username + Phone, pagination via Next button
+- **Victory TARIK DB**: scrape `/player/contact-data` page (MUI) with 2-cycle deposit status check
+  - New file: `victory-tarikdb-check-flow.ts` — 2-cycle approach matching Python reference
+  - Cycle 1: `deposit_status=false` → scrape → "REGIS ONLY"
+  - Cycle 2: `deposit_status=true` → scrape → "REGIS + DEPO"
+  - Merge: REGIS+DEPO first, then REGIS ONLY (sorted like NUKE)
+  - Selectors: `depositStatusSelect`, `depositStatusTrue/False`, `filterDateBySelect`, `registeredDateOption`
+  - Scrapes Username + Phone, page size 1000, pagination via Next button
   - Reuses `setMuiDatePicker`/`parseDateParts` from `victory-nto-check-flow.ts` (now exported)
-  - Added `contactData` selector group to `victory-selectors.ts`
   - `AutomationService.checkTarikDb` routes VICTORY provider to `victoryTarikDbCheckFlow`
 - **Browser stealth**:
   - `channel: 'chrome'` — uses system-installed Google Chrome (real TLS fingerprint, correct sec-ch-ua)

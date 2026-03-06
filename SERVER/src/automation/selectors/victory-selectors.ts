@@ -127,6 +127,9 @@ export const VICTORY_SELECTORS = {
   },
   // ===== CONTACT DATA PAGE (/player/contact-data) — TARIK DB =====
   contactData: {
+    depositStatusSelect: '#mui-component-select-deposit_status',
+    depositStatusTrue: 'li[data-value="true"]',
+    depositStatusFalse: 'li[data-value="false"]',
     usernameInput: 'input[name="username_contains"]',
     filterDateBySelect: '#mui-component-select-date_filter_by',
     registeredDateOption: 'li[data-value="registered_date"]',
