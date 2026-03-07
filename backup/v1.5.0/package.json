@@ -1,0 +1,13 @@
+{
+  "name": "bot-nto",
+  "version": "1.5.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd server && npm run dev",
+    "start": "cd server && npm start",
+    "build": "cd server && npm run build",
+    "db:generate": "cd server && npx prisma generate",
+    "db:push": "cd server && npx prisma db push",
+    "db:studio": "cd server && npx prisma studio"
+  }
+}

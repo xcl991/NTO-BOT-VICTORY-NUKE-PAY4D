@@ -17,4 +17,13 @@ installer/output/
 installer/nto-bot.ico
 installer/ntobot.exe
 installer/ntobot.cs
+installer/botbopanel.exe
+installer/botbopanel.ico
 ntobot.exe
+
+# Backup binary artifacts
+backup/**/*.exe
+backup/**/*.rar
+
+# Data
+data/updates/

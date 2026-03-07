@@ -4,7 +4,7 @@
 ; ============================================
 
 #define MyAppName "BOT BO PANEL"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.6.0"
 #define MyAppPublisher "BOT BO PANEL"
 #define MyAppURL "http://localhost:6969"
 #define MyAppExeName "botbopanel.exe"
@@ -27,7 +27,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-VersionInfoVersion=1.2.0
+VersionInfoVersion=1.6.0
 VersionInfoCompany=BOT BO PANEL
 VersionInfoDescription=BOT BO PANEL Automation Dashboard Installer
 VersionInfoProductName=BOT BO PANEL

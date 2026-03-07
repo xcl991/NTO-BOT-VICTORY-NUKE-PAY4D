@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="id" class="">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOT BACK OFFICE PANEL</title>
+  <script>window.tailwindConfig = { darkMode: 'class' };</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <link href="assets/css/mobile.css" rel="stylesheet">
+  <style>
+    .nav-item.active { background-color: #2563eb; color: white; }
+    .nav-item.active i { color: white; }
+    .content-section { display: none; }
+    .content-section.active { display: block; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+    .stat-card { transition: all 0.2s; }
+    .provider-card:hover { border-color: #3b82f6; }
+    .provider-card { transition: all 0.2s; cursor: pointer; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    /* Dark mode overrides */
+    .dark body { background-color: #111827; color: #f3f4f6; }
+    .dark .bg-white { background-color: #1f2937 !important; }
+    .dark .bg-gray-50 { background-color: #111827 !important; }
+    .dark .bg-gray-100 { background-color: #374151 !important; }
+    .dark .bg-gray-200 { background-color: #4b5563 !important; }
+    .dark .border-gray-200 { border-color: #374151 !important; }
+    .dark .border-gray-300 { border-color: #4b5563 !important; }
+    .dark .text-gray-800 { color: #f3f4f6 !important; }
+    .dark .text-gray-700 { color: #d1d5db !important; }
+    .dark .text-gray-600 { color: #9ca3af !important; }
+    .dark .text-gray-500 { color: #9ca3af !important; }
+    .dark .text-gray-400 { color: #6b7280 !important; }
+    .dark .bg-white.rounded-xl { background-color: #1f2937 !important; }
+    .dark .hover\:bg-blue-50:hover { background-color: #1e3a5f !important; }
+    .dark .hover\:bg-gray-50:hover { background-color: #374151 !important; }
+    .dark .hover\:bg-gray-300:hover { background-color: #6b7280 !important; }
+    .dark .border-b { border-color: #374151; }
+    .dark .border-t { border-color: #374151; }
+    .dark .border-r { border-color: #374151; }
+    .dark .divide-gray-100 > * + * { border-color: #374151; }
+    .dark .divide-gray-200 > * + * { border-color: #374151; }
+    .dark input, .dark select { background-color: #374151 !important; border-color: #4b5563 !important; color: #f3f4f6 !important; }
+    .dark input::placeholder { color: #6b7280 !important; }
+    .dark .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.3) !important; }
+    .dark .shadow-xl { box-shadow: 0 20px 25px rgba(0,0,0,0.5) !important; }
+    .dark .shadow-lg { box-shadow: 0 10px 15px rgba(0,0,0,0.4) !important; }
+    .dark .stat-card:hover { box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+    .dark .provider-card:hover { border-color: #60a5fa; }
+    .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
+    .dark .nav-item.active { background-color: #1d4ed8; }
+    .dark .mobile-header { background: #1f2937 !important; border-color: #374151 !important; }
+    .dark .hamburger-icon span { background: #d1d5db !important; }
+
+    /* Dark mode: file input styling */
+    .dark input[type="file"]::file-selector-button { background-color: #374151; color: #d1d5db; border: none; }
+
+    /* Dark mode: peer toggle switch */
+    .dark .peer ~ div { background-color: #4b5563; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans transition-colors duration-200">
+
+  <!-- Mobile Header -->
+  <header class="mobile-header">
+    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+      <div class="hamburger-icon"><span></span><span></span><span></span></div>
+    </button>
+    <span class="font-bold text-blue-600"><i class="fas fa-robot mr-1"></i>BOT BACK OFFICE PANEL</span>
+    <div id="mobileStatus" class="text-xs"></div>
+  </header>
+  <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <div class="flex h-screen overflow-hidden">
+    <!-- ======== SIDEBAR ======== -->
+    <aside class="sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
+      <div class="h-16 flex items-center justify-center border-b border-gray-200">
+        <h1 class="text-xl font-bold"><i class="fas fa-robot mr-2 text-blue-600"></i>BOT BACK OFFICE PANEL</h1>
+      </div>
+      <nav class="flex-1 overflow-y-auto py-4">
+        <!-- OVERVIEW -->
+        <div class="px-3 mb-2"><span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">OVERVIEW</span></div>
+        <ul class="space-y-1 px-3 mb-4">
+          <li><a href="#" onclick="showSection('dashboard', this)" class="nav-item active flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-chart-line w-5 text-center"></i><span class="ml-3">Dashboard</span>
+          </a></li>
+        </ul>
+        <!-- NTO PANEL -->
+        <div class="px-3 mb-2"><span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">NTO PANEL</span></div>
+        <ul class="space-y-1 px-3 mb-4">
+          <li><a href="#" onclick="showSection('provider-nuke', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-bolt w-5 text-center text-red-400"></i><span class="ml-3">NUKE</span>
+            <span class="ml-auto text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded" id="navNukeCount">0</span>
+          </a></li>
+          <li><a href="#" onclick="showSection('provider-victory', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-trophy w-5 text-center text-yellow-500"></i><span class="ml-3">VICTORY</span>
+            <span class="ml-auto text-xs bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded" id="navVictoryCount">0</span>
+          </a></li>
+          <li><a href="#" onclick="showSection('provider-pay4d', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-credit-card w-5 text-center text-green-500"></i><span class="ml-3">PAY4D</span>
+            <span class="ml-auto text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded" id="navPay4dCount">0</span>
+          </a></li>
+        </ul>
+        <!-- TARIK DB -->
+        <div class="px-3 mb-2"><span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">TARIK DB</span></div>
+        <ul class="space-y-1 px-3 mb-4">
+          <li><a href="#" onclick="showSection('tarikdb-nuke', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-bolt w-5 text-center text-red-400"></i><span class="ml-3">NUKE</span>
+            <span class="ml-auto text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded" id="navTarikdbNukeCount">0</span>
+          </a></li>
+          <li><a href="#" onclick="showSection('tarikdb-victory', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-trophy w-5 text-center text-yellow-500"></i><span class="ml-3">VICTORY</span>
+            <span class="ml-auto text-xs bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded" id="navTarikdbVictoryCount">0</span>
+          </a></li>
+          <li><a href="#" onclick="showSection('tarikdb-pay4d', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-credit-card w-5 text-center text-green-500"></i><span class="ml-3">PAY4D</span>
+            <span class="ml-auto text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded" id="navTarikdbPay4dCount">0</span>
+          </a></li>
+          <li><a href="#" onclick="showSection('tarikdb-scheduler', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-calendar-check w-5 text-center text-indigo-500"></i><span class="ml-3">Scheduler</span>
+          </a></li>
+        </ul>
+        <!-- MONITORING -->
+        <div class="px-3 mb-2"><span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">MONITORING</span></div>
+        <ul class="space-y-1 px-3 mb-4">
+          <li><a href="#" onclick="showSection('nto-results', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-clipboard-check w-5 text-center"></i><span class="ml-3">NTO Results</span>
+          </a></li>
+          <li><a href="#" onclick="showSection('bot-activity', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-terminal w-5 text-center"></i><span class="ml-3">Bot Activity</span>
+          </a></li>
+        </ul>
+        <!-- TOOLS -->
+        <div class="px-3 mb-2"><span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">TOOLS</span></div>
+        <ul class="space-y-1 px-3 mb-4">
+          <li><a href="#" onclick="showSection('settings', this)" class="nav-item flex items-center px-4 py-3 rounded-lg hover:bg-blue-50 text-sm font-medium">
+            <i class="fas fa-gear w-5 text-center"></i><span class="ml-3">Settings</span>
+          </a></li>
+        </ul>
+      </nav>
+      <div class="p-4 border-t border-gray-200">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center text-sm" id="systemStatus">
+            <span class="w-2 h-2 rounded-full bg-gray-400 mr-2" id="statusDot"></span>
+            <span class="text-gray-500" id="statusText">Connecting...</span>
+          </div>
+          <button onclick="toggleDarkMode()" class="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Toggle Dark Mode" id="darkModeBtn">
+            <i class="fas fa-moon" id="darkModeIcon"></i>
+          </button>
+        </div>
+        <p class="text-xs text-gray-400">BOT BACK OFFICE PANEL</p>
+      </div>
+    </aside>
+
+    <!-- ======== MAIN CONTENT ======== -->
+    <main class="main-content flex-1 overflow-y-auto bg-gray-50 p-4 md:p-8">
+
+      <!-- ===== DASHBOARD ===== -->
+      <div id="dashboard" class="content-section active">
+        <h2 class="text-2xl font-bold mb-6"><i class="fas fa-chart-line mr-2 text-blue-600"></i>Dashboard</h2>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="stat-card bg-white rounded-xl shadow-sm p-4">
+            <div class="flex items-center justify-between">
+              <div><p class="text-sm text-gray-500">Total Accounts</p><p class="text-2xl font-bold" id="statTotalAccounts">0</p></div>
+              <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-users text-blue-600 text-lg"></i></div>
+            </div>
+          </div>
+          <div class="stat-card bg-white rounded-xl shadow-sm p-4">
+            <div class="flex items-center justify-between">
+              <div><p class="text-sm text-gray-500">Active Bots</p><p class="text-2xl font-bold text-green-600" id="statActiveBots">0</p></div>
+              <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-robot text-green-600 text-lg"></i></div>
+            </div>
+          </div>
+          <div class="stat-card bg-white rounded-xl shadow-sm p-4">
+            <div class="flex items-center justify-between">
+              <div><p class="text-sm text-gray-500">NTO Checks Today</p><p class="text-2xl font-bold text-purple-600" id="statNtoToday">0</p></div>
+              <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center"><i class="fas fa-clipboard-check text-purple-600 text-lg"></i></div>
+            </div>
+          </div>
+          <div class="stat-card bg-white rounded-xl shadow-sm p-4">
+            <div class="flex items-center justify-between">
+              <div><p class="text-sm text-gray-500">System</p><p class="text-lg font-bold text-gray-600" id="statUptime">-</p></div>
+              <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center"><i class="fas fa-server text-orange-500 text-lg"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Provider Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="provider-card bg-white rounded-xl shadow-sm p-6 border-2 border-transparent hover:border-red-300" onclick="showSection('provider-nuke', document.querySelector('[onclick*=provider-nuke]'))">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center"><div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-3"><i class="fas fa-bolt text-red-500"></i></div><h3 class="font-bold text-lg">NUKE</h3></div>
+              <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full" id="dashNukeStatus">0 active</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">Accounts</p><p class="font-bold" id="dashNukeAccounts">0</p></div>
+              <div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">Last NTO</p><p class="font-bold truncate" id="dashNukeLastNto">-</p></div>
+            </div>
+          </div>
+          <div class="provider-card bg-white rounded-xl shadow-sm p-6 border-2 border-transparent hover:border-yellow-300" onclick="showSection('provider-victory', document.querySelector('[onclick*=provider-victory]'))">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center"><div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-3"><i class="fas fa-trophy text-yellow-500"></i></div><h3 class="font-bold text-lg">VICTORY</h3></div>
+              <span class="text-xs bg-yellow-100 text-yellow-600 px-2 py-1 rounded-full" id="dashVictoryStatus">0 active</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">Accounts</p><p class="font-bold" id="dashVictoryAccounts">0</p></div>
+              <div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">Last NTO</p><p class="font-bold truncate" id="dashVictoryLastNto">-</p></div>
+            </div>
+          </div>
+          <div class="provider-card bg-white rounded-xl shadow-sm p-6 border-2 border-transparent hover:border-green-300" onclick="showSection('provider-pay4d', document.querySelector('[onclick*=provider-pay4d]'))">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center"><div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3"><i class="fas fa-credit-card text-green-500"></i></div><h3 class="font-bold text-lg">PAY4D</h3></div>
+              <span class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full" id="dashPay4dStatus">0 active</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">Accounts</p><p class="font-bold" id="dashPay4dAccounts">0</p></div>
+              <div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">Last NTO</p><p class="font-bold truncate" id="dashPay4dLastNto">-</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts + Activity -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-chart-pie mr-2 text-blue-500"></i>Accounts by Provider</h3>
+            <div class="h-64"><canvas id="providerChart"></canvas></div>
+          </div>
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-clock-rotate-left mr-2 text-purple-500"></i>Recent Activity</h3>
+            <div id="recentActivityList" class="space-y-2 max-h-64 overflow-y-auto">
+              <p class="text-sm text-gray-400 text-center py-8"><i class="fas fa-inbox text-2xl block mb-2"></i>No activity yet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== NTO PROVIDER SECTIONS (rendered by JS) ===== -->
+      <div id="provider-nuke" class="content-section"></div>
+      <div id="provider-victory" class="content-section"></div>
+      <div id="provider-pay4d" class="content-section"></div>
+
+      <!-- ===== TARIK DB SECTIONS (rendered by JS) ===== -->
+      <div id="tarikdb-nuke" class="content-section"></div>
+      <div id="tarikdb-victory" class="content-section"></div>
+      <div id="tarikdb-pay4d" class="content-section"></div>
+
+      <!-- ===== TARIK DB SCHEDULER ===== -->
+      <div id="tarikdb-scheduler" class="content-section">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+          <div>
+            <h2 class="text-2xl font-bold"><i class="fas fa-calendar-check mr-2 text-indigo-500"></i>TARIK DB Scheduler</h2>
+            <p class="text-gray-500 text-sm mt-1">Auto-check TARIK DB H+1 (tanggal kemarin) setiap hari pada jam tertentu</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Settings Card -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-cog mr-2 text-gray-600"></i>Pengaturan</h3>
+            <div class="space-y-4">
+              <!-- Enable toggle -->
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div><p class="text-sm font-medium">Enable Scheduler</p><p class="text-xs text-gray-500">Jalankan otomatis setiap hari</p></div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="settingSchedulerEnabled" onchange="saveSetting('tarikdb.scheduler.enabled', this.checked)" class="sr-only peer">
+                  <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                </label>
+              </div>
+              <!-- Time input -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Waktu Check (24h)</label>
+                <input type="time" id="settingSchedulerTime" value="08:00" class="w-full border border-gray-300 rounded-lg p-3 text-sm" onchange="saveSetting('tarikdb.scheduler.time', this.value)">
+                <p class="text-xs text-gray-400 mt-1">Bot akan check data H+1 (kemarin) pada jam ini</p>
+              </div>
+              <!-- Account selection -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="block text-sm font-medium text-gray-700">Pilih Akun TARIK DB</label>
+                  <span class="text-xs text-gray-400" id="schedulerAccountCounter">0 dipilih</span>
+                </div>
+                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                  <!-- Search + Select controls -->
+                  <div class="flex items-center gap-2 p-2 bg-gray-50 border-b border-gray-200">
+                    <div class="relative flex-1">
+                      <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                      <input type="text" id="schedulerAccountSearch" oninput="filterSchedulerAccounts()" class="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Cari akun...">
+                    </div>
+                    <button onclick="selectAllSchedulerAccounts(true)" class="text-[10px] px-2 py-1 rounded bg-indigo-100 text-indigo-600 hover:bg-indigo-200 whitespace-nowrap">Semua</button>
+                    <button onclick="selectAllSchedulerAccounts(false)" class="text-[10px] px-2 py-1 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 whitespace-nowrap">Hapus</button>
+                  </div>
+                  <!-- Scrollable account list -->
+                  <div id="schedulerAccountList" class="max-h-52 overflow-y-auto p-2 space-y-1">
+                    <p class="text-xs text-gray-400 text-center py-2">Loading...</p>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Centang akun yang ingin di-check otomatis setiap hari</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status & Control Card -->
+          <div class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm p-6">
+              <h3 class="font-bold mb-4"><i class="fas fa-power-off mr-2 text-green-500"></i>Status & Kontrol</h3>
+              <div class="space-y-4">
+                <!-- Status -->
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div class="flex items-center gap-3">
+                    <div id="schedulerStatusDot" class="w-3 h-3 rounded-full bg-gray-400"></div>
+                    <div>
+                      <p class="text-sm font-medium">Scheduler Status</p>
+                      <p class="text-xs text-gray-500" id="schedulerStatusText">Checking...</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button onclick="toggleScheduler()" id="schedulerToggleBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700">
+                      <i class="fas fa-play mr-1"></i>Start
+                    </button>
+                    <button onclick="checkSchedulerStatus()" class="px-3 py-2 rounded-lg text-sm bg-gray-200 text-gray-600 hover:bg-gray-300" title="Refresh status">
+                      <i class="fas fa-sync-alt"></i>
+                    </button>
+                  </div>
+                </div>
+                <!-- Run Now -->
+                <button onclick="runSchedulerNow()" id="schedulerRunNowBtn" class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700">
+                  <i class="fas fa-bolt"></i>Run Sekarang (H+1)
+                </button>
+                <p class="text-xs text-gray-400 text-center">Trigger manual — check tanggal kemarin untuk semua akun yang dipilih</p>
+              </div>
+            </div>
+
+            <!-- Last Run Info -->
+            <div class="bg-white rounded-xl shadow-sm p-6">
+              <h3 class="font-bold mb-4"><i class="fas fa-history mr-2 text-purple-500"></i>Riwayat Terakhir</h3>
+              <div id="schedulerLastRunBox" class="text-sm text-gray-600">
+                <p id="schedulerLastRunText" class="text-gray-400 text-center py-3">Belum pernah dijalankan</p>
+              </div>
+            </div>
+
+            <!-- Log -->
+            <div class="bg-white rounded-xl shadow-sm p-6">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-bold"><i class="fas fa-terminal mr-2 text-green-500"></i>Log</h3>
+                <button onclick="clearLog('schedulerLog')" class="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+              </div>
+              <div id="schedulerLog" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded-lg h-48 overflow-y-auto">
+                <div class="text-gray-500">[Ready] Waiting for scheduler...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== NTO RESULTS ===== -->
+      <div id="nto-results" class="content-section">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold"><i class="fas fa-clipboard-check mr-2 text-purple-600"></i>NTO Results</h2>
+          <div class="flex gap-2">
+            <select id="ntoFilterProvider" onchange="loadNtoResults()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Providers</option>
+              <option value="NUKE">NUKE</option>
+              <option value="VICTORY">VICTORY</option>
+              <option value="PAY4D">PAY4D</option>
+            </select>
+            <button onclick="loadNtoResults()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+              <i class="fas fa-sync mr-1"></i>Refresh
+            </button>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-4 py-3 text-left">Provider</th>
+                  <th class="px-4 py-3 text-left">Account</th>
+                  <th class="px-4 py-3 text-left">NTO Value</th>
+                  <th class="px-4 py-3 text-left">Checked At</th>
+                </tr>
+              </thead>
+              <tbody id="ntoResultsTableBody">
+                <tr><td colspan="4" class="px-4 py-8 text-center text-gray-400"><i class="fas fa-inbox text-2xl block mb-2"></i>No NTO results yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== BOT ACTIVITY ===== -->
+      <div id="bot-activity" class="content-section">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold"><i class="fas fa-terminal mr-2 text-green-600"></i>Bot Activity</h2>
+          <button onclick="loadActivity()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+            <i class="fas fa-sync mr-1"></i>Refresh
+          </button>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Active Bots -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-robot mr-2 text-green-500"></i>Active Bots</h3>
+            <div id="activeBotsList" class="space-y-2 max-h-96 overflow-y-auto">
+              <p class="text-sm text-gray-400 text-center py-4">No active bots</p>
+            </div>
+          </div>
+          <!-- Live Log -->
+          <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold"><i class="fas fa-scroll mr-2 text-blue-500"></i>Live Log</h3>
+              <button onclick="clearLog('globalLog')" class="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+            </div>
+            <div id="globalLog" class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded-lg h-80 overflow-y-auto">
+              <div class="text-gray-500">[System] Waiting for activity...</div>
+            </div>
+          </div>
+        </div>
+        <!-- Activity History -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mt-6">
+          <h3 class="font-bold mb-4"><i class="fas fa-history mr-2 text-gray-500"></i>Activity History</h3>
+          <div id="activityHistoryList" class="space-y-2 max-h-64 overflow-y-auto">
+            <p class="text-sm text-gray-400 text-center py-4">Loading...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SETTINGS ===== -->
+      <div id="settings" class="content-section">
+        <h2 class="text-2xl font-bold mb-6"><i class="fas fa-gear mr-2 text-gray-600"></i>Settings</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Browser Settings -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-globe mr-2 text-blue-500"></i>Browser Settings</h3>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div><p class="text-sm font-medium">Headless Mode</p><p class="text-xs text-gray-500">Run browser without visible window</p></div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="settingHeadless" onchange="saveSetting('browser.headless', this.checked)" class="sr-only peer">
+                  <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                </label>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Slow Motion (ms)</label>
+                <input type="number" id="settingSlowMo" value="100" class="w-full border border-gray-300 rounded-lg p-3 text-sm" onchange="saveSetting('browser.slowMo', this.value)">
+              </div>
+            </div>
+          </div>
+          <!-- NTO Settings -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-clipboard-check mr-2 text-purple-500"></i>NTO Settings</h3>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div><p class="text-sm font-medium">Auto Check NTO</p><p class="text-xs text-gray-500">Automatically check NTO when bot is running</p></div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="settingAutoCheck" checked onchange="saveSetting('nto.autoCheck', this.checked)" class="sr-only peer">
+                  <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                </label>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Check Interval (seconds)</label>
+                <input type="number" id="settingCheckInterval" value="30" class="w-full border border-gray-300 rounded-lg p-3 text-sm" onchange="saveSetting('nto.checkInterval', this.value)">
+              </div>
+            </div>
+          </div>
+          <!-- Telegram Bot (Unified: NTO + TARIK DB) -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-bell mr-2 text-yellow-500"></i>Telegram Bot</h3>
+            <p class="text-xs text-gray-400 mb-4">Satu bot untuk semua command (NTO & TARIK DB)</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
+                <input type="text" id="settingTelegramToken" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="123456:ABC-DEF..." onchange="saveSetting('notification.telegramBotToken', this.value)">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID — NTO Group</label>
+                <input type="text" id="settingTelegramChatId" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="-100123456789" onchange="saveSetting('notification.telegramChatId', this.value)">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID — TARIK DB Group</label>
+                <input type="text" id="settingTelegramChatIdTarikDb" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="-100987654321" onchange="saveSetting('notification.telegramChatIdTarikDb', this.value)">
+                <p class="text-xs text-gray-400 mt-1">Kosong = TARIK DB command diterima di NTO group.</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Admin User IDs <span class="text-xs text-gray-400">(untuk approval TARIK DB)</span></label>
+                <input type="text" id="settingAdminUserIds" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="123456789, 987654321" onchange="saveAdminUserIds(this.value)">
+                <p class="text-xs text-gray-400 mt-1">Pisahkan dengan koma. Kosong = semua user dianggap admin.</p>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="flex items-center gap-3">
+                  <div id="telegramStatusDot" class="w-3 h-3 rounded-full bg-gray-400"></div>
+                  <div>
+                    <p class="text-sm font-medium">Listener</p>
+                    <p class="text-xs text-gray-500" id="telegramStatusText">Checking...</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="toggleTelegramListener()" id="telegramToggleBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700">
+                    <i class="fas fa-play mr-1"></i>Start
+                  </button>
+                  <button onclick="checkTelegramStatus()" class="px-3 py-2 rounded-lg text-sm bg-gray-200 text-gray-600 hover:bg-gray-300" title="Refresh status">
+                    <i class="fas fa-sync-alt"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Captcha API -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-robot mr-2 text-purple-500"></i>Captcha Solver (PAY4D)</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">2Captcha API Key</label>
+                <div class="flex gap-2">
+                  <input type="password" id="settingCaptchaApiKey" class="flex-1 border border-gray-300 rounded-lg p-3 text-sm" placeholder="Your 2captcha.com API key" onchange="saveSetting('captcha_api_key', this.value); load2CaptchaBalance();">
+                  <button onclick="load2CaptchaBalance()" class="px-4 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 whitespace-nowrap"><i class="fas fa-sync-alt mr-1"></i>Cek Saldo</button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Dibutuhkan untuk solve captcha PAY4D. Daftar di <a href="https://2captcha.com" target="_blank" class="text-blue-500 underline">2captcha.com</a></p>
+              </div>
+              <div id="captchaBalanceBox" class="hidden p-3 rounded-lg bg-gray-50">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-gray-600"><i class="fas fa-wallet mr-2"></i>Saldo 2Captcha</span>
+                  <span id="captchaBalanceValue" class="text-lg font-bold text-purple-600">-</span>
+                </div>
+              </div>
+              <!-- Captcha Usage History -->
+              <div id="captchaHistorySection" class="hidden">
+                <div class="flex items-center justify-between cursor-pointer select-none mt-2 p-2 rounded-lg hover:bg-gray-50" onclick="toggleCaptchaHistory()">
+                  <span class="text-sm font-medium text-gray-700"><i class="fas fa-history mr-2 text-purple-400"></i>Riwayat Penggunaan</span>
+                  <i id="captchaHistoryToggleIcon" class="fas fa-chevron-down text-gray-400 text-xs transition-transform"></i>
+                </div>
+                <div id="captchaHistoryContent" class="hidden">
+                  <div id="captchaHistoryStats" class="flex gap-3 mb-2">
+                    <span class="text-xs px-2 py-1 bg-purple-50 text-purple-600 rounded-full"><i class="fas fa-hashtag mr-1"></i><span id="captchaStatsSolves">0</span> solves</span>
+                    <span class="text-xs px-2 py-1 bg-red-50 text-red-500 rounded-full"><i class="fas fa-coins mr-1"></i>$<span id="captchaStatsCost">0.00</span> total</span>
+                    <span class="text-xs px-2 py-1 bg-blue-50 text-blue-500 rounded-full"><i class="fas fa-chart-line mr-1"></i>$<span id="captchaStatsAvg">0.000</span>/solve</span>
+                  </div>
+                  <div class="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200">
+                    <table class="w-full text-xs">
+                      <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th class="text-left p-2 text-gray-500 font-medium">Waktu</th>
+                          <th class="text-left p-2 text-gray-500 font-medium">Account</th>
+                          <th class="text-left p-2 text-gray-500 font-medium">Result</th>
+                          <th class="text-right p-2 text-gray-500 font-medium">Cost</th>
+                          <th class="text-right p-2 text-gray-500 font-medium">Saldo</th>
+                          <th class="text-center p-2 text-gray-500 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="captchaHistoryBody" class="divide-y divide-gray-100">
+                        <tr><td colspan="6" class="p-4 text-center text-gray-400">Belum ada data</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Auto Updater -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-cloud-download-alt mr-2 text-indigo-500"></i>Auto Updater</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Update URL</label>
+                <input type="text" id="settingUpdaterUrl" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="https://example.com/versions.json" onchange="saveSetting('updater.url', this.value)">
+                <p class="text-xs text-gray-400 mt-1">URL ke versions.json (GitHub Releases atau HTTP server)</p>
+              </div>
+              <!-- Update status info box -->
+              <div id="updateCheckResult" class="hidden">
+                <div id="updateInfoBox" class="p-4 rounded-lg border">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium" id="updateInfoTitle">-</span>
+                    <span class="text-xs px-2 py-1 rounded-full" id="updateInfoBadge">-</span>
+                  </div>
+                  <p class="text-xs text-gray-500 whitespace-pre-line" id="updateInfoChangelog"></p>
+                </div>
+              </div>
+              <!-- One-click update button -->
+              <button onclick="oneClickUpdate()" id="btnOneClickUpdate" class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                <i class="fas fa-sync-alt mr-2"></i>Cek & Update Otomatis
+              </button>
+              <!-- Progress indicator -->
+              <div id="updateProgress" class="hidden">
+                <div class="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <i class="fas fa-spinner fa-spin text-blue-500"></i>
+                  <span class="text-sm text-blue-700" id="updateProgressText">Updating...</span>
+                </div>
+              </div>
+              <!-- Manual upload -->
+              <div class="border-t pt-3 mt-3">
+                <p class="text-xs text-gray-400 mb-2">Atau upload file update manual:</p>
+                <div class="flex gap-2">
+                  <input type="file" id="updateFileInput" accept=".zip" class="flex-1 text-xs border border-gray-300 rounded-lg p-2 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gray-100 file:text-gray-700">
+                  <button onclick="uploadAndApplyUpdate()" class="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 whitespace-nowrap">
+                    <i class="fas fa-upload mr-1"></i>Upload & Install
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- System Info -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-bold mb-4"><i class="fas fa-info-circle mr-2 text-gray-500"></i>System Info</h3>
+            <div class="space-y-2 text-sm" id="systemInfoContent">
+              <div class="flex justify-between p-2 bg-gray-50 rounded"><span class="text-gray-500">Version</span><span class="font-medium" id="settingVersion">-</span></div>
+              <div class="flex justify-between p-2 bg-gray-50 rounded"><span class="text-gray-500">Port</span><span class="font-medium">6969</span></div>
+              <div class="flex justify-between p-2 bg-gray-50 rounded"><span class="text-gray-500">Database</span><span class="font-medium">SQLite</span></div>
+              <div class="flex justify-between p-2 bg-gray-50 rounded"><span class="text-gray-500">Uptime</span><span class="font-medium" id="settingUptime">-</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ======== EDIT ACCOUNT MODAL ======== -->
+  <div id="editAccountModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg">
+      <div class="flex justify-between items-center p-5 border-b">
+        <h3 class="font-bold text-lg"><i class="fas fa-edit mr-2 text-blue-600"></i>Edit Account</h3>
+        <button onclick="hideEditModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <div class="p-6 space-y-4">
+        <input type="hidden" id="editAccountId">
+        <input type="hidden" id="editAccountProvider">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+          <input type="text" id="editAccountName" class="w-full border border-gray-300 rounded-lg p-3 text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Panel URL</label>
+          <input type="url" id="editAccountPanelUrl" class="w-full border border-gray-300 rounded-lg p-3 text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+          <input type="text" id="editAccountUsername" class="w-full border border-gray-300 rounded-lg p-3 text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Password <span class="text-gray-400">(leave blank to keep current)</span></label>
+          <input type="password" id="editAccountPassword" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="••••••••">
+        </div>
+        <div id="editPinCodeGroup" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">PIN Code <span class="text-gray-400">(leave blank to keep current)</span></label>
+          <input type="password" id="editAccountPinCode" class="w-full border border-gray-300 rounded-lg p-3 text-sm" placeholder="••••••••">
+        </div>
+        <div id="editTwoFaSecretGroup" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">2FA Secret (TOTP) <span class="text-gray-400">(leave blank to keep current)</span></label>
+          <input type="text" id="editAccountTwoFaSecret" class="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono" placeholder="JBSWY3DPEHPK3PXP">
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button onclick="saveAccountEdit()" class="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium">
+            <i class="fas fa-save mr-2"></i>Save Changes
+          </button>
+          <button onclick="hideEditModal()" class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== OTP MODAL ======== -->
+  <div id="otpModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm">
+      <div class="flex justify-between items-center p-5 border-b">
+        <h3 class="font-bold text-lg"><i class="fas fa-key mr-2 text-amber-500"></i>OTP Required</h3>
+        <button onclick="hideOtpModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <div class="p-6 space-y-4">
+        <input type="hidden" id="otpAccountId">
+        <p class="text-sm text-gray-600">Enter the OTP code for <strong id="otpAccountName">-</strong></p>
+        <input type="text" id="otpInput" class="w-full border border-gray-300 rounded-lg p-3 text-center text-2xl tracking-widest font-mono" placeholder="000000" maxlength="6">
+        <button onclick="submitOtp()" class="w-full bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 font-medium">
+          <i class="fas fa-paper-plane mr-2"></i>Submit OTP
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize dark mode before page renders to prevent flash
+    (function() {
+      const isDark = localStorage.getItem('darkMode') === 'true' ||
+        (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

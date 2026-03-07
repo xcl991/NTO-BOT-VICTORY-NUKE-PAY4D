@@ -27,7 +27,8 @@
 │   │   │   ├── bot.ts         # /api/bot (start, stop, start-all, stop-all, submit-otp, screenshot)
 │   │   │   ├── dashboard.ts   # /api/dashboard (stats, activity)
 │   │   │   ├── nto.ts         # /api/nto (list, latest, stats, check, export, telegram, download)
-│   │   │   └── settings.ts    # /api/settings + telegram listener control + captcha balance/history
+│   │   │   ├── settings.ts    # /api/settings + telegram listener control + captcha balance/history
+│   │   │   └── updater.ts     # /api/updater (check, download, apply, upload)
 │   │   ├── automation/
 │   │   │   ├── index.ts             # AutomationService orchestrator class
 │   │   │   ├── browser/
@@ -38,6 +39,7 @@
 │   │   │   │   ├── nuke-tarikdb-check-flow.ts   # NUKE TARIK DB (member management page scraping)
 │   │   │   │   ├── pay4d-login-flow.ts          # PAY4D login (captcha + cross-origin PIN iframe)
 │   │   │   │   ├── pay4d-nto-check-flow.ts      # PAY4D Win Lose All (multiselect, CSV download+parse)
+│   │   │   │   ├── pay4d-tarikdb-check-flow.ts  # PAY4D TARIK DB (All User page → profile click → phone extraction)
 │   │   │   │   ├── victory-login-flow.ts        # VICTORY login (username/password, MUI)
 │   │   │   │   ├── victory-nto-check-flow.ts    # VICTORY NTO (2-tab: by-player → detail → sum valid_bet by category)
 │   │   │   │   └── victory-tarikdb-check-flow.ts # VICTORY TARIK DB (contact-data page scraping)
@@ -77,6 +79,7 @@
 │   ├── start.vbs        # Silent launcher (no CMD window)
 │   ├── start.bat        # Debug launcher (visible CMD)
 │   ├── stop.bat         # Kill server on port 6969
+│   ├── update.bat       # Manual update script (standalone)
 │   ├── ff7acb18-*.jpg   # NTO BOT logo source image
 │   ├── BOT-BO-PANEL.png # BOT BO PANEL logo source image
 │   ├── output/          # Built installer .exe files (gitignored)
@@ -90,8 +93,10 @@
 │   ├── exports/         # Excel exports (.xlsx)
 │   ├── downloads/       # PAY4D CSV downloads
 │   ├── screenshots/     # Browser screenshots
-│   └── captcha-debug/   # Captcha processing debug images
+│   ├── captcha-debug/   # Captcha processing debug images
+│   └── updates/         # Auto-updater downloads and temp files
 ├── profiles/            # Playwright persistent browser sessions (gitignored)
+├── build-update.bat     # Developer tool: package source into update ZIP
 ├── .env                 # Root env (mirrors SERVER/.env)
 └── package.json         # Root monorepo (proxy scripts to SERVER/)
 ```
@@ -115,7 +120,7 @@
 - **Windows Startup** shortcut created by installer for auto-launch on login
 
 ## Database Models (Prisma)
-- **Account** - Provider accounts (provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret, status, lastNto, lastError, isActive)
+- **Account** - Provider accounts (provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret, proxy, status, lastNto, lastError, isActive)
 - **BotSession** - Bot run sessions (accountId, provider, status, startedAt, stoppedAt)
 - **NtoResult** - NTO check results (accountId, provider, value, rawData as JSON)
 - **ActivityLog** - Action logs (action, provider, accountId, details, status)
@@ -124,7 +129,7 @@
 
 ## Providers
 - **NUKE** - nukepanel.com (Ant Design UI). Fully implemented: session check via `/homepage` + login + auto-OTP (if twoFaSecret set) + NTO report scraping + TARIK DB member scraping. All NUKE accounts check saved session before login.
-- **PAY4D** - pay4d panel (Bootstrap UI). Fully implemented: captcha login + PIN iframe + Win Lose All CSV
+- **PAY4D** - pay4d panel (Bootstrap UI). Fully implemented: captcha login + PIN iframe + Win Lose All CSV + TARIK DB (All User page scraping)
 - **VICTORY** - victory panel (MUI React SPA). Fully implemented: login + 2-tab NTO (by-player → detail page → filter by game category → sum valid_bet_amount) + TARIK DB (contact-data page scraping by Registered Date)
 
 ## API Routes
@@ -135,6 +140,7 @@
 - `GET /api/nto` + `/latest` + `/stats` + `/result/:id` + `POST /api/nto/check|export|telegram` + `GET /api/nto/download/:filename`
 - `GET/PUT /api/settings/:key` + telegram listener control + captcha balance/history
 - `POST /api/settings/tarikdb-scheduler/start|stop|run-now` + `GET /api/settings/tarikdb-scheduler/status`
+- `GET /api/updater/check` + `POST /api/updater/download|apply|upload`
 
 ## WebSocket Events (broadcast via wsBroadcast)
 - `BOT_STATUS` - Account status change (accountId, provider, status, name)
@@ -177,6 +183,12 @@
 - NUKE TARIK DB Status detection: green color `rgb(3, 170, 20)` or `#03aa14` on ID cell → "REGIS + DEPO", else → "REGIS ONLY"
 - TARIK DB results sorted: REGIS+DEPO first, then REGIS ONLY (matching Python reference)
 - Victory TARIK DB: 2-cycle scraping on `/player/contact-data` — Cycle 1: `deposit_status=false` → REGIS ONLY, Cycle 2: `deposit_status=true` → REGIS + DEPO, merged (DEPO first)
+- PAY4D TARIK DB: scrapes "All User" page (`switchMenu('menuAllUser')`) — no server-side date filter, scans rows client-side for matching Join Date
+  - Phone NOT in table — must click profile button (`editProfilUsers`) → read `input.form-control.telpon` → click "Back to All Users"
+  - Status: `credit > 0` → "REGIS + DEPO", else → "REGIS ONLY" (credit from table column 2)
+  - Join Date in column 4 as `input[type='text'][readonly]`, format "DD Mon YYYY" (e.g. "03 Mar 2026")
+  - Pagination via numbered `<li class="page-item" onclick="menuUsers(N)">` pages (no Next/Prev button)
+  - ~6 seconds per user (click profile → read → back), slower than NUKE/Victory
 - Account `feature` field (`NTO` or `TARIKDB`) controls which Telegram listener processes commands for that account
 - TARIK DB Scheduler: auto-check H+1 (yesterday) daily at configurable time
   - Settings: `tarikdb.scheduler.enabled` (boolean), `tarikdb.scheduler.time` (HH:MM), `tarikdb.scheduler.accountIds` (json array)
@@ -191,10 +203,12 @@
 
 ## Known Issues
 - **NUKE mid-session OTP (RESOLVED v1.1.0):** Was returning "Otp Token Invalid". Root cause: **PC clock drift** (e.g. 50 seconds ahead) caused TOTP codes to be generated from wrong time window. Fix: `totp.ts` utility auto-syncs time from HTTP server Date headers (Google/Cloudflare) at startup, applies offset to all TOTP generation. Form filling uses `valueTracker-reset` strategy (resets React's internal `_valueTracker` then sets value via native setter + dispatches input/change events).
-- Passwords/PINs stored plaintext in SQLite (ENCRYPTION_KEY exists in .env but unused)
-- Root tsconfig.json references non-existent folders (shared/, NUKE/, VICTORY/, PAY4D/)
+- **OTP waiting_otp timeout (RESOLVED v1.6.0):** Auto-stop bot after 2 minutes if OTP not submitted
+- **Pending approval TTL (RESOLVED v1.6.0):** Expired approval requests auto-cleaned after 10 minutes
+- **Missing DEFAULT_SETTINGS (RESOLVED v1.6.0):** `adminUserIds` and `telegramChatIdTarikDb` now seeded
+- Passwords/PINs stored plaintext in SQLite (ENCRYPTION_KEY exists in .env but unused) — planned for future version
 - Telegram listener auto-closes browser after each command (wastes 2Captcha credits on PAY4D)
-- OTP waiting_otp status has no timeout (browser stays open indefinitely)
+- PAY4D TARIK DB: profile-click flow is slow (~6s per user) — no server-side phone API available
 
 ## Research / Planned
 
@@ -229,6 +243,80 @@
   - Backward compatible: format lama (dengan tanggal) tetap didukung 100%
 
 ## Changelog
+
+### v1.6.0
+- **Bug Fixes & Stability**
+  - Add missing `DEFAULT_SETTINGS`: `notification.adminUserIds` (json, `[]`) and `notification.telegramChatIdTarikDb` (string, `''`) — fresh installs now auto-seed these
+  - Add TTL/expiration (10 min) to `pendingRequests` Map in telegram-listener — auto-cleanup expired approval requests via 60s interval timer, hooks into `start()`/`stop()`
+  - Add OTP timeout (2 min) — `setTimeout` in `AutomationService.startBot()`, auto-stops bot + closes browser if `waiting_otp` status persists after 120s
+  - NTO list endpoint (`GET /api/nto`) now supports `offset` query param and returns `total` count for pagination
+  - Root `tsconfig.json` cleanup — removed non-existent folder references (`shared/`, `NUKE/`, `VICTORY/`, `PAY4D/`)
+- **Panel UX Improvements**
+  - Custom confirmation modal (`showConfirmModal`) — replaced all 7 native `confirm()` dialogs with themed modal (dark mode compatible)
+  - NTO Results pagination — page size selector (10/25/50/100), prev/next controls, total count display
+  - NTO Results search — filter by account name (live search input)
+  - NTO Export Excel button — green icon per-result row, triggers `POST /api/nto/export` + auto-downloads file
+  - NTO Send Telegram button — blue Telegram icon per-result row, triggers `POST /api/nto/telegram`
+  - Screenshot button — purple camera icon appears on running accounts, opens modal with live browser screenshot + refresh
+  - Loading spinners — start/stop bot buttons show spinner during async operation
+  - Bot Activity log filters — dropdown filter by provider (NUKE/VICTORY/PAY4D) and status (success/error/warning/info)
+  - New API client methods: `nto.check()`, `nto.exportExcel()`, `nto.sendTelegram()`, `nto.result()`, `bot.screenshotUrl()`
+- **PAY4D TARIK DB** — new feature: scrape "All User" page for member data
+  - New file: `pay4d-tarikdb-check-flow.ts` — navigates to All User page, scans rows for matching Join Date, clicks profile for phone, determines status by credit
+  - No server-side date filter — client-side scan of Join Date column (`input[type='text'][readonly]` in column 4)
+  - Profile-click flow: click `editProfilUsers` button → read `input.form-control.telpon` → click "Back to All Users" (~6s per user)
+  - Status: `credit > 0` → "REGIS + DEPO", else → "REGIS ONLY"
+  - Supports both date_range mode (scan for matching dates) and old_user mode (search by username)
+  - Phone number formatting: `08xxx` → `628xxx` (matching Python reference)
+  - Pagination via numbered `<li class="page-item" onclick="menuUsers(N)">` pages (no Next/Prev button)
+  - Continues to next page if target dates found (handles 100+ rows per date across pages)
+  - Recovery on error: auto-navigates back to All User page
+  - New selectors in `pay4d-selectors.ts`: `allUser` section (menuButton, searchInput, profileButton, phoneInput, backButton, pagination)
+  - `AutomationService.checkTarikDb()` routes PAY4D provider to new flow
+  - Works with existing Telegram TARIK DB commands, Excel export, and Scheduler
+- **Per-Account Proxy** — each account can use its own HTTP/HTTPS/SOCKS5/SOCKS4 proxy
+  - New `proxy` field on Account model (optional String)
+  - Proxy passed to Playwright `launchPersistentContext` with `{ server, username?, password? }`
+  - `parseProxyString()` in `context-manager.ts` handles all proxy URL formats
+  - Proxy credentials masked in logs: `proxyStr.replace(/\/\/.*:.*@/, '//***:***@')`
+  - Panel UI: dropdown (HTTP/HTTPS/SOCKS5/SOCKS4) + simplified input `host:port:username:password`
+  - `buildProxyUrl()` / `parseProxyUrl()` helpers in app.js for format conversion
+  - Works for all providers (NUKE, PAY4D, VICTORY) and all features (NTO + TARIK DB)
+- **Audit Fixes**
+  - Fixed duplicate `class` attribute on checkbox in account table row template (app.js)
+  - Fixed error response format in updater.ts — all errors now include `code` field (consistent with other routes)
+  - Fixed schema comment: `logged_in` → `logging_in` (matches actual code usage)
+
+### v1.5.0
+- **Dark Mode** — full dark mode support for panel UI
+  - TailwindCSS `darkMode: 'class'` configuration via CDN
+  - Comprehensive CSS `.dark` class overrides for all Tailwind utility classes (backgrounds, text, borders, shadows, inputs, scrollbars)
+  - Dark mode toggle button (moon/sun icon) in sidebar footer
+  - `localStorage` persistence for dark mode preference
+  - System preference detection via `prefers-color-scheme: dark` (auto-detect on first visit)
+  - Flash prevention: inline script before app.js applies dark class immediately on page load
+  - Chart.js legend colors adapt to dark/light mode
+  - Mobile header and hamburger icon dark mode support in `mobile.css`
+  - All JS-rendered content (provider sections, activity list, stat cards, forms, modals) styled via CSS class overrides
+  - Functions: `toggleDarkMode()`, `updateDarkModeIcon()`, `isDarkMode()` in app.js
+
+### v1.4.0
+- **Auto Updater** — one-click update system from panel
+  - New route: `SERVER/src/routes/updater.ts` with 4 endpoints (`check`, `download`, `apply`, `upload`)
+  - One-click flow: "Cek & Update Otomatis" button → check → confirm → download → install → restart → auto-refresh
+  - PowerShell update script (detached): stop server → backup DB → extract ZIP → npm install → prisma generate/push → restart
+  - Manual upload: offline update via ZIP file upload from panel
+  - WebSocket `UPDATE_STATUS` events for real-time progress
+  - Auto-reload: panel polls `/api/health` after server restart, refreshes when ready
+  - `express-fileupload` middleware registered for upload support (50MB limit)
+  - `build-update.bat` — developer tool to package source files into update ZIP
+  - `installer/update.bat` — standalone manual update script (no panel needed)
+  - Setting: `updater.url` — URL to versions.json manifest
+  - versions.json format: `{ "latest": "1.4.0", "changelog": "...", "downloadUrl": "https://..." }`
+  - Preserved during update: `data/` (DB, logs), `profiles/`, `.env`
+- **Dynamic version** — version now read from `SERVER/package.json` at runtime (was hardcoded)
+  - `APP_VERSION` constant, exposed globally and used in `/api` endpoint + console banner
+  - Panel System Info shows live version from API
 
 ### v1.2.0
 - **TARIK DB Admin Approval** — non-admin users need admin approval before TARIK DB runs
