@@ -18,7 +18,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
         ...(feature ? { account: { feature: String(feature) } } : {}),
       },
     }),
-    Promise.all(['NUKE', 'VICTORY', 'PAY4D'].map(async (provider) => {
+    Promise.all(['NUKE', 'VICTORY', 'PAY4D', 'CUTTLY'].map(async (provider) => {
       const provWhere = { ...accountWhere, provider };
       const [total, active, lastNto] = await Promise.all([
         prisma.account.count({ where: provWhere }),

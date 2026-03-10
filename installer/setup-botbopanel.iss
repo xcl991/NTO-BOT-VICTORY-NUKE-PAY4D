@@ -4,7 +4,7 @@
 ; ============================================
 
 #define MyAppName "BOT BO PANEL"
-#define MyAppVersion "1.6.0"
+#define MyAppVersion "1.8.1"
 #define MyAppPublisher "BOT BO PANEL"
 #define MyAppURL "http://localhost:6969"
 #define MyAppExeName "botbopanel.exe"
@@ -20,14 +20,14 @@ DefaultDirName={sd}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer\output
-OutputBaseFilename=BOTBOPANEL
+OutputBaseFilename=BOTBOPANEL-v1.8.1
 SetupIconFile=installer\botbopanel.ico
 UninstallDisplayIcon={app}\botbopanel.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-VersionInfoVersion=1.6.0
+VersionInfoVersion=1.8.1
 VersionInfoCompany=BOT BO PANEL
 VersionInfoDescription=BOT BO PANEL Automation Dashboard Installer
 VersionInfoProductName=BOT BO PANEL

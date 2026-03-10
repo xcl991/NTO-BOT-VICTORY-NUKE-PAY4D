@@ -42,19 +42,28 @@
 │   │   │   │   ├── pay4d-tarikdb-check-flow.ts  # PAY4D TARIK DB (All User page → profile click → phone extraction)
 │   │   │   │   ├── victory-login-flow.ts        # VICTORY login (username/password, MUI)
 │   │   │   │   ├── victory-nto-check-flow.ts    # VICTORY NTO (2-tab: by-player → detail → sum valid_bet by category)
-│   │   │   │   └── victory-tarikdb-check-flow.ts # VICTORY TARIK DB (contact-data page scraping)
+│   │   │   │   ├── victory-tarikdb-check-flow.ts # VICTORY TARIK DB (contact-data page scraping)
+│   │   │   │   ├── victory-livereport-flow.ts   # VICTORY Live Report (by-referral + by-company profit/loss scraping)
+│   │   │   │   ├── cuttly-login-flow.ts         # CUTT.LY login (email/password + reCAPTCHA v3) + session check
+│   │   │   │   ├── cuttly-gantinomor-flow.ts    # CUTT.LY GANTI NOMOR (search → change all matching shortlinks + pagination)
+│   │   │   │   └── nuke-gantinomor-flow.ts      # NUKE GANTI NOMOR (identity page WA number change)
 │   │   │   ├── selectors/
-│   │   │   │   ├── nuke-selectors.ts      # Ant Design component selectors (login, OTP 6-digit, report, member)
+│   │   │   │   ├── nuke-selectors.ts      # Ant Design component selectors (login, OTP 6-digit, report, member, identity)
 │   │   │   │   ├── pay4d-selectors.ts     # Bootstrap component selectors
+│   │   │   │   ├── cuttly-selectors.ts    # CUTT.LY selectors (login, search results, change URL page)
 │   │   │   │   └── victory-selectors.ts   # MUI component selectors (report + detail + contact-data page)
 │   │   │   └── utils/
 │   │   │       ├── captcha-solver.ts    # 2Captcha submit + poll + usage tracking
 │   │   │       ├── excel-export.ts      # ExcelJS NTO + TARIK DB report export
 │   │   │       ├── retry-handler.ts     # fillWithFallback, clickWithFallback, withRetry
 │   │   │       ├── tarikdb-scheduler.ts # TARIK DB H+1 daily scheduler (auto-check yesterday)
+│   │   │       ├── livereport-processor.ts # Live Report data processing, HTML table rendering, PNG export
+│   │   │       ├── livereport-scheduler.ts # ALEXIS17 Live Report scheduler (hourly + daily/weekly/monthly recap)
+│   │   │       ├── provider-livereport-scheduler.ts # Provider NTO Live Report schedulers (NUKE, VICTORY, PAY4D)
 │   │   │       ├── totp.ts             # Time-corrected TOTP generator (auto-syncs clock from server)
 │   │   │       ├── telegram.ts          # Telegram API (send message/document/photo)
-│   │   │       └── telegram-listener.ts # Long-polling listener, NTO + TARIK DB command parsers, auto-start bot
+│   │   │       ├── telegram-listener.ts # Long-polling listener, NTO + TARIK DB command parsers, auto-start bot
+│   │   │       └── gantinomor-listener.ts # Separate Telegram listener for GANTI NOMOR commands
 │   │   └── utils/
 │   │       ├── errors.ts      # ApiError, ValidationError, asyncHandler, errorHandler
 │   │       ├── logger.ts      # Winston + daily rotate (data/logs/)
@@ -120,7 +129,7 @@
 - **Windows Startup** shortcut created by installer for auto-launch on login
 
 ## Database Models (Prisma)
-- **Account** - Provider accounts (provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret, proxy, status, lastNto, lastError, isActive)
+- **Account** - Provider accounts (provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret, proxy, uplineUsername, cuttlyLinkCs, cuttlyLinkMst, status, lastNto, lastError, isActive)
 - **BotSession** - Bot run sessions (accountId, provider, status, startedAt, stoppedAt)
 - **NtoResult** - NTO check results (accountId, provider, value, rawData as JSON)
 - **ActivityLog** - Action logs (action, provider, accountId, details, status)
@@ -128,9 +137,10 @@
 - **CaptchaUsage** - 2Captcha cost tracking (balanceBefore, balanceAfter, cost, result, status)
 
 ## Providers
-- **NUKE** - nukepanel.com (Ant Design UI). Fully implemented: session check via `/homepage` + login + auto-OTP (if twoFaSecret set) + NTO report scraping + TARIK DB member scraping. All NUKE accounts check saved session before login.
+- **NUKE** - nukepanel.com (Ant Design UI). Fully implemented: session check via `/homepage` + login + auto-OTP (if twoFaSecret set) + NTO report scraping + TARIK DB member scraping + GANTI NOMOR (identity page WA number change). All NUKE accounts check saved session before login.
 - **PAY4D** - pay4d panel (Bootstrap UI). Fully implemented: captcha login + PIN iframe + Win Lose All CSV + TARIK DB (All User page scraping)
 - **VICTORY** - victory panel (MUI React SPA). Fully implemented: login + 2-tab NTO (by-player → detail page → filter by game category → sum valid_bet_amount) + TARIK DB (contact-data page scraping by Registered Date)
+- **CUTTLY** - cutt.ly shortlink management. Fully implemented: email/password login (reCAPTCHA v3 invisible) + persistent session + GANTI NOMOR (search old phone → change all matching shortlinks across pagination)
 
 ## API Routes
 - `GET /api` - System info
@@ -140,6 +150,10 @@
 - `GET /api/nto` + `/latest` + `/stats` + `/result/:id` + `POST /api/nto/check|export|telegram` + `GET /api/nto/download/:filename`
 - `GET/PUT /api/settings/:key` + telegram listener control + captcha balance/history
 - `POST /api/settings/tarikdb-scheduler/start|stop|run-now` + `GET /api/settings/tarikdb-scheduler/status`
+- `POST /api/settings/livereport-scheduler/start|stop|run-now` + `GET /api/settings/livereport-scheduler/status` (ALEXIS17)
+- `POST /api/settings/livereport-{nuke|victory|pay4d}-scheduler/start|stop|run-now` + `GET .../status` (Provider NTO Live Report)
+- `POST /api/settings/livereport-namemapping/upload` — Excel upload for username→name mapping
+- `POST /api/settings/gantinomor-listener/start|stop` + `GET /api/settings/gantinomor-listener/status`
 - `GET /api/updater/check` + `POST /api/updater/download|apply|upload`
 
 ## WebSocket Events (broadcast via wsBroadcast)
@@ -162,6 +176,15 @@
   - Old user (no dates): `Captain77 TARIK DB\nID1\nID2\nID3`
 - **Admin approval** for TARIK DB: non-admin users get inline keyboard (Approve/Cancel), admin identified by `notification.adminUserIds` (json array of Telegram user IDs). Empty = all users are admin.
 - Auto-starts bot if not running, runs check, replies with results + Excel
+- **GANTI NOMOR** — separate Telegram bot + chat ID (`notification.telegramBotTokenGantiNomor` + `notification.telegramChatIdGantiNomor`)
+  - Separate `GantiNomorTelegramListener` class in `gantinomor-listener.ts`
+  - **CUTT.LY command:** `cutt.ly GANTI NOMOR\nold mst:62xxx\nnew mst:62yyy`
+  - **NUKE command:** `Captain77 GANTI NOMOR\nold cs:62xxx\nnew cs:62yyy`
+  - Supports `old cs/new cs` and/or `old mst/new mst` (minimal salah satu pair)
+  - Multi-command: separator `---` untuk multiple commands dalam 1 pesan
+  - CUTT.LY: batched (start browser once → all commands → stop once)
+  - NUKE: per-account (start → process → stop per account)
+  - Auto-starts bot if not running, auto-closes after done
 
 ## Architecture Notes
 - Section-based SPA navigation (show/hide divs, rendered by app.js)
@@ -189,7 +212,16 @@
   - Join Date in column 4 as `input[type='text'][readonly]`, format "DD Mon YYYY" (e.g. "03 Mar 2026")
   - Pagination via numbered `<li class="page-item" onclick="menuUsers(N)">` pages (no Next/Prev button)
   - ~6 seconds per user (click profile → read → back), slower than NUKE/Victory
-- Account `feature` field (`NTO` or `TARIKDB`) controls which Telegram listener processes commands for that account
+- Account `feature` field (`NTO`, `TARIKDB`, `LIVEREPORT`, or `GANTINOMOR`) controls which Telegram listener processes commands for that account
+- ALEXIS17 Live Report uses separate Telegram bot token (`notification.telegramBotTokenLiveReport`), independent from NTO/TARIK DB
+- ALEXIS17 Live Report `uplineUsername` supports comma-separated values — loops per upline with 3s delay
+- ALEXIS17 Live Report username parsing is prefix-dynamic: any upline prefix works (not just `teammkt`/`teamreborn`)
+- ALEXIS17 Live Report scrapes by-referral + by-company, combined into 1 PNG (team table + company table below)
+- ALEXIS17 Live Report supports "Nama" column via `livereport.nameMapping` setting (JSON: `{username: realName}`)
+- Provider NTO Live Report: per-provider schedulers (NUKE, VICTORY, PAY4D) that run NTO checks at intervals and send summary to Telegram
+  - Settings: `livereport.{nuke|victory|pay4d}.scheduler.{enabled|interval|accountIds|gameCategories|lastRun}`
+  - Uses main NTO Telegram config (`notification.telegramBotToken` + `notification.telegramChatId`)
+  - Panel: separate scheduler page per provider under LIVE REPORT sidebar group
 - TARIK DB Scheduler: auto-check H+1 (yesterday) daily at configurable time
   - Settings: `tarikdb.scheduler.enabled` (boolean), `tarikdb.scheduler.time` (HH:MM), `tarikdb.scheduler.accountIds` (json array)
   - 60-second interval checks if current time matches scheduled time, `lastRunDate` prevents re-runs same day
@@ -243,6 +275,140 @@
   - Backward compatible: format lama (dengan tanggal) tetap didukung 100%
 
 ## Changelog
+
+### v1.8.1
+- **ALEXIS17 Live Report Improvements**
+  - **Combined report output** — team table + company report rendered as 1 PNG (was 2 separate PNGs)
+    - `renderCombinedReportToPng()` in `livereport-processor.ts` — combines team HTML + company HTML in single page
+    - `buildHtmlTableBody()` extracted as reusable inner HTML (shared by standalone and combined renders)
+    - Scheduler uses combined render when `companyData` exists, falls back to team-only render
+  - **Horizontal company report** — company data displayed as 2 rows × 12 columns (was vertical Metric|Value)
+    - Row 1: Date, Reg, Login, 1st DP, 1st DP Amt, #DP, DP Amt, DP User, #WD, WD Amt, WD User, DP/WD Diff
+    - Row 2: #Adj, Adj Amt, #Bet, Bet Amt, Valid Bet, Player WL, Promo, Rebate, Commission, Total WL, FRB, JPC
+    - `buildCompanyHtmlHorizontal()` replaces `buildCompanyHtmlPage()`
+  - **Name mapping (Nama column)** — username→real name mapping for team table
+    - New `livereport.nameMapping` setting (JSON: `{username: realName}`)
+    - "Nama" column added to team table when mapping has entries
+    - `buildHtmlTableBody()` accepts `nameMapping` parameter
+    - Excel upload: `POST /api/settings/livereport-namemapping/upload` (col A=Nama, col B=Username)
+    - Panel UI: upload button + manual add/delete + table display on ALEXIS17 scheduler page
+    - Scheduler loads mapping from DB and passes to render functions
+  - **Blacklist username** — exclude specific usernames from report output
+    - New `livereport.blacklist` setting (JSON array of usernames, case-insensitive)
+    - Scheduler filters raw rows before `summarize()` — blacklisted users excluded from team table, totals, and Top 5
+    - Panel UI: input field (Enter key support) + tag-style pill badges with delete buttons
+    - Counter shows total blacklisted users
+  - **Panel sidebar renamed**: "LIVE REPORT" group label, "ALEXIS17" menu item (was "Scheduler")
+- **Provider NTO Live Report Schedulers** — per-provider automated NTO checks
+  - New file: `provider-livereport-scheduler.ts` — generic `ProviderLiveReportScheduler` class
+  - 3 instances: `nukeLiveReportScheduler`, `victoryNtoScheduler`, `pay4dLiveReportScheduler`
+  - Each runs NTO checks on configured accounts at a set interval
+  - Checks all configured game categories (SLOT, CASINO, SPORTS, GAMES) per account
+  - Sends formatted summary to Telegram (grouped by account, per-game totals)
+  - Settings per provider: `livereport.{nuke|victory|pay4d}.scheduler.{enabled|interval|accountIds|gameCategories}`
+  - Uses main NTO Telegram bot token + chat ID (shared with NTO commands)
+  - API routes: `POST /api/settings/livereport-{nuke|victory|pay4d}-scheduler/start|stop|run-now` + `GET .../status`
+  - Auto-starts on server boot if enabled; stops on graceful shutdown
+  - Panel: 3 new sidebar items (NUKE, VICTORY, PAY4D) under LIVE REPORT group
+  - Panel: dynamically rendered scheduler page per provider (enable toggle, interval, game category checkboxes, account picker, status, live log)
+  - 12 new DEFAULT_SETTINGS auto-seeded on first load
+- **Bug Fix**: Excel upload for name mapping — `express-fileupload` with `useTempFiles: true` requires `wb.xlsx.readFile(file.tempFilePath)` instead of `wb.xlsx.load(file.data)`
+
+### v1.8.0
+- **Live Report Improvements**
+  - **Separate Telegram bot token** for Live Report: `notification.telegramBotTokenLiveReport` — Live Report uses its own bot, independent from NTO/TARIK DB bot
+  - **Multiple upline support** — `uplineUsername` supports comma-separated values (e.g., `teamreborn,superalx`), loops through each upline: scrape → render → send per upline, 3s delay between
+  - **Dynamic username prefix** — `usernameKeyMkt()` and `usernameKeyReborn()` now accept dynamic prefix from upline username instead of hardcoded `teammkt`/`teamreborn`. Any upline prefix works (e.g., `superalx`, `captain77`)
+  - **No-letter username support** — usernames without member letter suffix (e.g., `superalx1`, `superalx10`) now parse correctly. Member letter is optional in regex. For these patterns: label uses original username, team total rows skipped (redundant)
+  - **Dynamic report title** — report title uses upline username in uppercase (e.g., `SUPERALX REPORT`, `TEAMREBORN MKT REPORT`) instead of hardcoded "TEAMREBORN"
+  - **Company Report** — separate PNG scraped from `/report/report-profit-loss/by-company`
+    - New flow: `victoryCompanyReportFlow()` in `victory-livereport-flow.ts`
+    - Navigates to by-company page, sets date range, clicks Filter, finds row matching target date
+    - Extracts 24 columns: Date, Reg Count, Login Count, 1st DP, DP, WD, DP/WD Diff, Adjustment, Bet, Valid Bet, Player WL, Promo, Rebate, Commission, Total WL, FRB, JPC
+    - Flexible date matching (e.g., "9 March 2026" or "09/03/2026")
+    - Rendered as standalone vertical table (Metric | Value) with color-coded WL values
+    - Scraped once per account, sent as separate PNG after all upline reports
+    - New function: `renderCompanyReportToPng()` in `livereport-processor.ts`
+  - **Per-account manual trigger** — `POST /api/settings/livereport-scheduler/run-now` accepts `accountId` in body to trigger single account
+  - **Proxy input** in Live Report account creation form (panel)
+  - **Per-account run button** in Live Report scheduler account list (panel)
+- **GANTI NOMOR** — Telegram-driven WhatsApp number change for NUKE identity page + CUTT.LY shortlinks
+  - **New provider: CUTTLY** — cutt.ly shortlink management with persistent browser session
+    - `cuttly-login-flow.ts`: email/password login at `https://cutt.ly/login` (reCAPTCHA v3 invisible auto-executes)
+    - `cuttlySessionCheck()`: checks saved session by navigating to panelUrl, detects login redirect or form
+    - Persistent browser profile: login once, reuse session until expired
+  - **New flow: `cuttly-gantinomor-flow.ts`** — search old phone → change ALL matching shortlinks
+    - `collectMatchingResults()`: scans all `.url_options` divs on page for `phone={oldNumber}` in link href
+    - `collectPaginationUrls()`: extracts pagination links for multi-page results
+    - `changeOneResult()`: navigates to `/change/{alias}` → replaces `phone=old` with `phone=new` in input → submits
+    - `changeSingleLink()`: orchestrates all pages with dedup via `visitedPages` Set, returns `changedCount`
+    - Handles 10+ results per page across multiple pagination pages
+  - **New flow: `nuke-gantinomor-flow.ts`** — NUKE identity page (`/configuration/identity`) WA number change
+    - Navigates to identity page, handles mid-session OTP via `handleMidSessionOtp()`
+    - `fillAntInput()`: valueTracker-reset strategy for Ant Design inputs (reset `_valueTracker` → native setter → dispatch events)
+    - Verifies old number matches current value before changing
+    - Reads current WA1 (CS) and WA2 (MST) values, fills new values, submits form
+  - **New selectors: `cuttly-selectors.ts`** — login form (#email, #password, button.g-recaptcha), search results (.url_options), change page (input[name="link"]), pagination
+  - **NUKE selectors: identity section** — #whatsapp, #whatsapp2, submit button with fallbacks
+  - **New listener: `gantinomor-listener.ts`** — separate `GantiNomorTelegramListener` class
+    - Own bot token + chat ID: `notification.telegramBotTokenGantiNomor` + `notification.telegramChatIdGantiNomor`
+    - Command format: `cutt.ly GANTI NOMOR` (CUTTLY) or `AccountName GANTI NOMOR` (NUKE)
+    - Supports `old cs:` / `new cs:` and/or `old mst:` / `new mst:` (minimal 1 pair)
+    - Multi-command: `---` separator for multiple commands in 1 message
+    - Explicit provider routing: `cutt.ly` / `cuttly` header → CUTTLY, anything else → NUKE by name match
+    - Per-account command queueing via `accountQueues` Map
+    - CUTT.LY batched: start browser once → process all commands → stop once
+    - NUKE: start/stop per account
+    - Auto-starts bot if not running, waits for login (60s timeout), handles OTP
+    - Auto-closes browser after all commands done
+  - **AutomationService.changeNumber()** — routes by provider: CUTTLY → `cuttlyGantiNomorFlow`, NUKE → `nukeGantiNomorFlow`
+  - **New account fields**: `cuttlyLinkCs String?`, `cuttlyLinkMst String?` — team shortlink URLs for CS and MST
+  - **Validation**: `providerEnum` includes `CUTTLY`, `featureEnum` includes `GANTINOMOR`
+  - **Dashboard**: CUTTLY added to provider stats query
+  - **Settings**: `notification.telegramBotTokenGantiNomor` + `notification.telegramChatIdGantiNomor` auto-seeded
+  - **API routes**: `POST /api/settings/gantinomor-listener/start|stop`, `GET /api/settings/gantinomor-listener/status`
+  - **Auto-start**: listener starts on boot if both token + chatId configured
+  - **Graceful shutdown**: listener stopped on server exit
+  - **Panel**: GANTI NOMOR sidebar group (NUKE, CUTT.LY, Settings sections)
+  - **Panel**: CS Link + MST Link form fields (conditional on CUTTLY provider) in add/edit account
+  - **Panel**: Telegram bot token + chat ID settings with listener toggle + status indicator
+  - **Panel**: command guide with CUTT.LY vs NUKE examples
+- **Panel Changes**
+  - Added "Telegram Bot Token (Live Report)" input field in scheduler settings
+  - Added proxy dropdown + input to Live Report add account form
+  - Per-account play button + inline upline editing in account list
+
+### v1.7.0
+- **Live Report** — Victory panel profit/loss report scraping with team-based summary + PNG rendering
+  - New flow: `victory-livereport-flow.ts` — scrapes `/report/report-profit-loss/by-referral` page
+    - Sets Upline Username (MUI input with char-by-char typing + JS fallback)
+    - Sets date range via MUI DatePicker (reuses `setMuiDatePicker` from victory-nto-check-flow)
+    - Scroll-scrapes MUI virtual table (up to 600 iterations, dedup by username key)
+    - Sets page size to 1000 via MUI Select combobox
+  - New processor: `livereport-processor.ts` — data processing + HTML table → PNG rendering
+    - Username parsing: MKT mode (`teammkt1glen` → Team 1, GLEN) vs REBORN mode (`teamreborn1a` → 1A)
+    - Columns: REGIS, 1stDP, 1stDP Amount, Closing%, AVG PERFORM, DP, DP Amt, AVG DP PERFORM, Valid Bet, Winlose
+    - Conditional coloring: AVG ≥100K → green, <100K → red; Closing ≥70% → green, <70% → red
+    - Team totals (yellow), grand total (dark teal), Top 5 rankings
+    - Renders styled HTML table via Playwright `page.setContent()` + `screenshot()` → PNG buffer
+    - 20 motivational quotes for Telegram captions
+  - New scheduler: `livereport-scheduler.ts` — `LiveReportScheduler` class (matches TarikDbScheduler pattern)
+    - Settings: `livereport.scheduler.enabled`, `.interval` (minutes), `.accountIds` (json), `.dailyRecapTime` (HH:MM), `.weeklyRecap`, `.monthlyRecap`, `.lastRun`
+    - Separate Telegram bot: `notification.telegramBotTokenLiveReport` + `notification.telegramChatIdLiveReport`
+    - 60s interval check: daily recap (H-1 at configurable time) + weekly (Monday 10:00) + monthly (1st 10:00) + hourly
+    - Sequential account processing: start bot → login → scrape → summarize → render PNG → send Telegram → stop bot
+    - Mode detection: `uplineUsername` containing 'mkt' → MKT mode, else → REBORN mode
+  - New account feature: `LIVEREPORT` (alongside `NTO` and `TARIKDB`)
+  - New field: `uplineUsername String?` on Account model (used for Live Report upline filter)
+  - New Telegram function: `sendTelegramPhotoBufferToChat()` — sends PNG buffer via sendPhoto with fallback to sendDocument
+  - New method: `AutomationService.checkLiveReport()` — validates VICTORY provider, runs flow, processes data, renders PNG
+  - Victory selectors: added `liveReport` section (uplineInput, startDate, endDate, filterButton, tableBody, loadingSpinner)
+  - Panel: Live Report Scheduler page with config card (enable, interval, daily recap time, weekly/monthly checkboxes, Telegram chat ID)
+  - Panel: inline account creation form on scheduler page (name, URL, username, password, upline)
+  - Panel: account picker with search, select all/none, counter
+  - Panel: upline field in edit account modal (shown for LIVEREPORT feature accounts)
+  - Validation: `featureEnum` updated to include `LIVEREPORT` (v1.8.0 adds `GANTINOMOR`)
+  - Auto-starts on server boot if enabled; stops on graceful shutdown
 
 ### v1.6.0
 - **Bug Fixes & Stability**

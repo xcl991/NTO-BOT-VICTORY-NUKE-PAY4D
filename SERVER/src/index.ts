@@ -10,7 +10,10 @@ import logger from './utils/logger';
 import { errorHandler } from './utils/errors';
 import prisma from './utils/prisma';
 import { telegramListener } from './automation/utils/telegram-listener';
+import { gantiNomorListener } from './automation/utils/gantinomor-listener';
 import { tarikdbScheduler } from './automation/utils/tarikdb-scheduler';
+import { livereportScheduler } from './automation/utils/livereport-scheduler';
+import { nukeLiveReportScheduler, victoryNtoScheduler, pay4dLiveReportScheduler } from './automation/utils/provider-livereport-scheduler';
 
 // Read version from package.json (single source of truth)
 const APP_VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8')).version || '0.0.0';
@@ -217,6 +220,51 @@ async function start() {
     } catch (e) {
       logger.warn(`Could not check scheduler auto-start: ${e}`);
     }
+
+    // Auto-start GANTI NOMOR listener
+    try {
+      const gnToken = await prisma.setting.findUnique({ where: { key: 'notification.telegramBotTokenGantiNomor' } });
+      const gnChatId = await prisma.setting.findUnique({ where: { key: 'notification.telegramChatIdGantiNomor' } });
+      if (gnToken?.value && gnChatId?.value) {
+        logger.info('GANTI NOMOR Telegram config found, auto-starting listener...');
+        gantiNomorListener.start().catch(e => logger.warn(`GANTI NOMOR listener start error: ${e}`));
+      } else {
+        logger.info('GANTI NOMOR Telegram not configured, skipping auto-start');
+      }
+    } catch (e) {
+      logger.warn(`Could not check GANTI NOMOR auto-start: ${e}`);
+    }
+
+    // Auto-start Live Report scheduler if enabled
+    try {
+      const lrEnabled = await prisma.setting.findUnique({ where: { key: 'livereport.scheduler.enabled' } });
+      if (lrEnabled?.value === 'true') {
+        logger.info('Live Report scheduler enabled, auto-starting...');
+        livereportScheduler.start();
+      } else {
+        logger.info('Live Report scheduler not enabled, skipping auto-start');
+      }
+    } catch (e) {
+      logger.warn(`Could not check Live Report scheduler auto-start: ${e}`);
+    }
+
+    // Auto-start Provider NTO Live Report schedulers
+    const providerSchedulerMap = [
+      { key: 'nuke', scheduler: nukeLiveReportScheduler },
+      { key: 'victory', scheduler: victoryNtoScheduler },
+      { key: 'pay4d', scheduler: pay4dLiveReportScheduler },
+    ];
+    for (const { key, scheduler } of providerSchedulerMap) {
+      try {
+        const enabled = await prisma.setting.findUnique({ where: { key: `livereport.${key}.scheduler.enabled` } });
+        if (enabled?.value === 'true') {
+          logger.info(`Live Report ${key.toUpperCase()} scheduler enabled, auto-starting...`);
+          scheduler.start();
+        }
+      } catch (e) {
+        logger.warn(`Could not check ${key.toUpperCase()} Live Report scheduler auto-start: ${e}`);
+      }
+    }
   });
 }
 
@@ -224,7 +272,12 @@ async function start() {
 async function shutdown() {
   logger.info('Shutting down...');
   telegramListener.stop();
+  gantiNomorListener.stop();
   tarikdbScheduler.stop();
+  livereportScheduler.stop();
+  nukeLiveReportScheduler.stop();
+  victoryNtoScheduler.stop();
+  pay4dLiveReportScheduler.stop();
   try {
     const { contextManager } = await import('./automation/browser/context-manager');
     await contextManager.closeAll();

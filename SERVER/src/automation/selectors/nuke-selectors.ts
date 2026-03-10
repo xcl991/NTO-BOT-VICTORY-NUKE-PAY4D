@@ -210,4 +210,25 @@ export const NUKE_SELECTORS = {
     tableLoading: '.ant-table-loading, .ant-spin-spinning',
     tablePlaceholder: '.ant-empty-description',
   },
+  // ===== IDENTITY / CONFIGURATION PAGE =====
+  identity: {
+    // WhatsApp (CS) input
+    whatsapp: '#whatsapp',
+    whatsappFallbacks: [
+      'input#whatsapp',
+      'input.ant-input[id="whatsapp"]',
+    ],
+    // Second WhatsApp (MST) input
+    whatsapp2: '#whatsapp2',
+    whatsapp2Fallbacks: [
+      'input#whatsapp2',
+      'input.ant-input[id="whatsapp2"]',
+    ],
+    // Submit button
+    submitButton: 'button[type="submit"].ant-btn-primary',
+    submitButtonFallbacks: [
+      'button.ant-btn-primary:has-text("Submit")',
+      'form button[type="submit"]',
+    ],
+  },
 } as const;

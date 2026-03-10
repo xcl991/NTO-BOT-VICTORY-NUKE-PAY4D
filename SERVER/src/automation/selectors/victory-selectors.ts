@@ -146,4 +146,40 @@ export const VICTORY_SELECTORS = {
     cellUsername: (n: number) => `[data-testid="tablerow-${n}-username"]`,
     cellPhone: (n: number) => `[data-testid="tablerow-${n}-phone"]`,
   },
+  // ===== LIVE REPORT PAGE (/report/report-profit-loss/by-referral) =====
+  liveReport: {
+    // --- Navigation ---
+    menuReport: "//span[normalize-space()='5. Report']",
+    menuProfitLoss: "//span[normalize-space()='5.8 Profit & Loss Report']",
+    tabByReferral: "a[role='tab'][href*='by-referral'], a[role='tab']:has-text('By Referral')",
+
+    // --- Upline Username Input (MUI OutlinedInput with label "Upline Username") ---
+    uplineInput: 'input[name="uplineUsername"], input#uplineUsername',
+    uplineInputFallbacks: [
+      "//div[contains(@class,'MuiOutlinedInput-root')][.//span[normalize-space()='Upline Username']]//input",
+      "//fieldset[.//span[normalize-space()='Upline Username']]/preceding-sibling::input[1]",
+      "//input[@placeholder='Search' and ancestor::div[contains(@class,'MuiOutlinedInput-root')][.//span[normalize-space()='Upline Username']]]",
+    ],
+
+    // --- Date Pickers (same IDs as report page) ---
+    startDate: '#ReportFilter_DatePicker_startdate',
+    endDate: '#ReportFilter_DatePicker_enddate',
+
+    // --- Filter Button ---
+    filterButton: 'button.MuiButton-containedError[type="submit"]',
+    filterButtonFallbacks: [
+      'button[type="submit"]:has-text("Filter")',
+      'button.MuiButton-contained[type="submit"]',
+    ],
+
+    // --- Page Size (MUI Select combobox) ---
+    pageSizeSelect: "div[role='combobox'].MuiSelect-select",
+
+    // --- Table (reuses MUI table structure) ---
+    tableContainer: '.MuiTableContainer-root',
+    tableBody: '.MuiTableBody-root, tbody.MuiTableBody-root',
+
+    // --- Loading ---
+    loadingSpinner: '.MuiCircularProgress-root',
+  },
 } as const;

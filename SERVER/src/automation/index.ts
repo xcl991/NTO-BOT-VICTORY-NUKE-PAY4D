@@ -3,16 +3,30 @@ import { contextManager } from './browser/context-manager';
 import { nukeLoginFlow, nukeSubmitOtp } from './flows/login-flow';
 import { pay4dLoginFlow } from './flows/pay4d-login-flow';
 import { victoryLoginFlow } from './flows/victory-login-flow';
+import { cuttlySessionCheck, cuttlyLoginFlow } from './flows/cuttly-login-flow';
 import { nukeNtoCheckFlow, screenshotReportTable, type NtoCheckResult, type GameCategory } from './flows/nto-check-flow';
 import { pay4dNtoCheckFlow, screenshotPay4dResults, type Pay4dGameCategory } from './flows/pay4d-nto-check-flow';
 import { victoryNtoCheckFlow, screenshotVictoryResults, type VictoryGameCategory } from './flows/victory-nto-check-flow';
 import { nukeTarikDbCheckFlow, type TarikDbCheckResult } from './flows/nuke-tarikdb-check-flow';
+import { nukeGantiNomorFlow, type GantiNomorResult } from './flows/nuke-gantinomor-flow';
+import { cuttlyGantiNomorFlow, type CuttlyGantiNomorResult } from './flows/cuttly-gantinomor-flow';
 import { victoryTarikDbCheckFlow } from './flows/victory-tarikdb-check-flow';
 import { pay4dTarikDbCheckFlow } from './flows/pay4d-tarikdb-check-flow';
+import { victoryLiveReportFlow, victoryCompanyReportFlow, type LiveReportScrapeResult, type CompanyReportRow } from './flows/victory-livereport-flow';
+import {
+  summarize as lrSummarize,
+  buildTableRows,
+  computeTop5,
+  renderTableToPng,
+  renderCompanyReportToPng,
+  buildTelegramCaption,
+  countMembers,
+  type LiveReportMode,
+} from './utils/livereport-processor';
 import { NUKE_SELECTORS } from './selectors/nuke-selectors';
 import { VICTORY_SELECTORS } from './selectors/victory-selectors';
 import { exportNtoToExcel, exportTarikDbToExcel } from './utils/excel-export';
-import { sendNtoReportToTelegram } from './utils/telegram';
+import { sendNtoReportToTelegram, sendTelegramPhotoBufferToChat } from './utils/telegram';
 import prisma from '../utils/prisma';
 import logger from '../utils/logger';
 import path from 'path';
@@ -141,6 +155,16 @@ export class AutomationService {
         }
       }
 
+      // CUTTLY: check saved session, login if expired
+      if (account.provider === 'CUTTLY') {
+        const sessionValid = await cuttlySessionCheck(instance.page, account.panelUrl, onLog);
+        if (sessionValid) {
+          isLoggedIn = true;
+        } else {
+          onLog('Session expired, will login');
+        }
+      }
+
       if (isLoggedIn) {
         await updateAccountStatus(accountId, 'running');
         onLog('Bot is now running!', 'success');
@@ -163,6 +187,9 @@ export class AutomationService {
           break;
         case 'VICTORY':
           loginResult = await victoryLoginFlow(instance.page, account.panelUrl, account.username, account.password, onLog);
+          break;
+        case 'CUTTLY':
+          loginResult = await cuttlyLoginFlow(instance.page, account.panelUrl, account.username, account.password, onLog);
           break;
         default:
           throw new Error(`Unknown provider: ${account.provider}`);
@@ -569,6 +596,227 @@ export class AutomationService {
     }
 
     return sent;
+  }
+
+  /**
+   * Run Live Report for an account (VICTORY only).
+   * Scrapes by-referral report, summarizes by team, renders PNG, sends to Telegram.
+   */
+  async checkLiveReport(accountId: number, options: {
+    dateStart: string;  // DD/MM/YYYY
+    dateEnd?: string;   // DD/MM/YYYY
+    sendToTelegram?: boolean;
+  }): Promise<{ success: boolean; memberCount: number; error?: string }> {
+    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    if (!account) throw new Error('Account not found');
+    if (account.provider !== 'VICTORY') throw new Error('Live Report only supports VICTORY provider');
+
+    const page = contextManager.getPage(accountId);
+    if (!page) throw new Error('No browser running for this account. Start the bot first.');
+
+    const onLog = createBroadcastLog(accountId, account.provider);
+    const rawUpline = account.uplineUsername;
+    if (!rawUpline) throw new Error('Account has no uplineUsername configured');
+
+    // Support multiple upline usernames (comma-separated)
+    const uplineList = rawUpline.split(',').map(u => u.trim()).filter(Boolean);
+    if (uplineList.length === 0) throw new Error('Account has empty uplineUsername');
+
+    let totalMembers = 0;
+
+    try {
+      await updateAccountStatus(accountId, 'checking_nto');
+      onLog(`Starting Live Report for ${uplineList.length} upline(s): ${uplineList.join(', ')}...`);
+
+      // Scrape company report once (same for all uplines)
+      let companyData: CompanyReportRow | undefined;
+      try {
+        onLog('Scraping company report...');
+        const companyResult = await victoryCompanyReportFlow(page, account.panelUrl, onLog, {
+          dateStart: options.dateStart,
+          dateEnd: options.dateEnd,
+          targetDate: options.dateStart,
+        });
+        if (companyResult.success && companyResult.row) {
+          companyData = companyResult.row;
+          onLog(`Company data scraped for ${companyResult.row.date}`, 'success');
+        } else {
+          onLog(`Company report: ${companyResult.error || 'no data'}`, 'warning');
+        }
+      } catch (e) {
+        onLog(`Company report error: ${e}`, 'warning');
+      }
+
+      for (const uplineUsername of uplineList) {
+        const mode: LiveReportMode = uplineUsername.toLowerCase().includes('mkt') ? 'MKT' : 'REBORN';
+        onLog(`Checking upline "${uplineUsername}" (mode: ${mode})...`);
+
+        const result = await victoryLiveReportFlow(page, account.panelUrl, onLog, {
+          uplineUsername,
+          dateStart: options.dateStart,
+          dateEnd: options.dateEnd,
+        });
+
+        if (!result.success || result.rows.length === 0) {
+          onLog(`No data for upline "${uplineUsername}": ${result.error || 'empty'}`, 'warning');
+          continue;
+        }
+
+        const summary = lrSummarize(result.rows, mode, uplineUsername);
+        const memberCount = countMembers(summary);
+        totalMembers += memberCount;
+        const tableRows = buildTableRows(summary, mode, uplineUsername);
+        const top5 = computeTop5(tableRows);
+
+        const now = new Date();
+        const modeLabel = mode === 'MKT' ? `${uplineUsername.toUpperCase()} MKT` : uplineUsername.toUpperCase();
+        const title = `${modeLabel} REPORT — ${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        // Render to PNG
+        onLog('Rendering table image...');
+        const pngBuffer = await renderTableToPng(page, tableRows, title, top5);
+
+        // Save result
+        await prisma.ntoResult.create({
+          data: {
+            accountId,
+            provider: account.provider,
+            value: `LIVEREPORT ${mode} (${memberCount} members)`,
+            rawData: JSON.stringify({ type: 'livereport', mode, uplineUsername, memberCount, options }),
+          },
+        });
+
+        // Send to Telegram if requested
+        if (options.sendToTelegram !== false) {
+          const botTokenSetting = await prisma.setting.findUnique({ where: { key: 'notification.telegramBotTokenLiveReport' } });
+          const chatIdSetting = await prisma.setting.findUnique({ where: { key: 'notification.telegramChatIdLiveReport' } });
+          const lrBotToken = botTokenSetting?.value || '';
+          const chatId = chatIdSetting?.value || '';
+
+          if (lrBotToken && chatId) {
+            const caption = buildTelegramCaption(title, tableRows, true);
+            const sent = await sendTelegramPhotoBufferToChat(chatId, pngBuffer, caption, `livereport_${mode.toLowerCase()}.png`, lrBotToken);
+            if (sent) {
+              onLog(`Live Report "${uplineUsername}" sent to Telegram!`, 'success');
+            } else {
+              onLog(`Failed to send Live Report for "${uplineUsername}"`, 'error');
+            }
+          } else {
+            onLog('No Telegram Bot Token or Chat ID configured for Live Report', 'warning');
+          }
+        }
+
+        // Delay between uplines
+        if (uplineList.indexOf(uplineUsername) < uplineList.length - 1) {
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+
+      // Send company report as separate PNG (once after all uplines)
+      if (companyData && options.sendToTelegram !== false) {
+        try {
+          const botTokenSetting = await prisma.setting.findUnique({ where: { key: 'notification.telegramBotTokenLiveReport' } });
+          const chatIdSetting = await prisma.setting.findUnique({ where: { key: 'notification.telegramChatIdLiveReport' } });
+          const lrBotToken = botTokenSetting?.value || '';
+          const chatId = chatIdSetting?.value || '';
+
+          if (lrBotToken && chatId) {
+            const now = new Date();
+            const companyTitle = `COMPANY REPORT — ${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            onLog('Rendering company report image...');
+            const companyPng = await renderCompanyReportToPng(page, companyData, companyTitle);
+            const sent = await sendTelegramPhotoBufferToChat(chatId, companyPng, companyTitle, 'company_report.png', lrBotToken);
+            if (sent) {
+              onLog('Company report sent to Telegram!', 'success');
+            } else {
+              onLog('Failed to send company report', 'error');
+            }
+          }
+        } catch (e) {
+          onLog(`Company report send error: ${e}`, 'warning');
+        }
+      }
+
+      await updateAccountStatus(accountId, 'running', { lastNto: `LIVEREPORT: ${totalMembers} members (${uplineList.length} uplines)` });
+      onLog(`Live Report complete: ${totalMembers} members from ${uplineList.length} upline(s)`, 'success');
+      return { success: true, memberCount: totalMembers };
+
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      onLog(`Live Report error: ${msg}`, 'error');
+      await updateAccountStatus(accountId, 'running', { lastError: msg });
+      return { success: false, memberCount: 0, error: msg };
+    }
+  }
+  /**
+   * Change WhatsApp number(s) via NUKE identity page or CUTT.LY shortlink.
+   */
+  async changeNumber(accountId: number, options: {
+    oldCs?: string;
+    newCs?: string;
+    oldMst?: string;
+    newMst?: string;
+  }): Promise<GantiNomorResult> {
+    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    if (!account) throw new Error('Account not found');
+    if (account.provider !== 'NUKE' && account.provider !== 'CUTTLY') {
+      throw new Error('GANTI NOMOR only supports NUKE and CUTTLY providers');
+    }
+
+    const page = contextManager.getPage(accountId);
+    if (!page) throw new Error('No browser running for this account. Start the bot first.');
+
+    const onLog = createBroadcastLog(accountId, account.provider);
+
+    try {
+      await updateAccountStatus(accountId, 'checking_nto');
+      onLog(`Starting GANTI NOMOR (${account.provider})...`);
+
+      let result: GantiNomorResult;
+
+      if (account.provider === 'CUTTLY') {
+        const cuttlyResult = await cuttlyGantiNomorFlow(page, onLog, {
+          cuttlyLinkCs: account.cuttlyLinkCs || undefined,
+          cuttlyLinkMst: account.cuttlyLinkMst || undefined,
+          oldCs: options.oldCs,
+          newCs: options.newCs,
+          oldMst: options.oldMst,
+          newMst: options.newMst,
+        });
+        result = cuttlyResult;
+      } else {
+        result = await nukeGantiNomorFlow(page, account.panelUrl, onLog, {
+          oldCs: options.oldCs,
+          newCs: options.newCs,
+          oldMst: options.oldMst,
+          newMst: options.newMst,
+          twoFaSecret: account.twoFaSecret || undefined,
+        });
+      }
+
+      if (result.success) {
+        const parts: string[] = [];
+        if (result.changed.cs) parts.push(`CS: ${result.changed.cs}`);
+        if (result.changed.mst) parts.push(`MST: ${result.changed.mst}`);
+        const summary = `GANTI NOMOR: ${parts.join(', ')}`;
+        await updateAccountStatus(accountId, 'running', { lastNto: summary });
+        onLog(`GANTI NOMOR saved: ${summary}`, 'success');
+
+        await prisma.activityLog.create({
+          data: { action: 'ganti_nomor', provider: account.provider, accountId, details: summary, status: 'success' },
+        });
+      } else {
+        await updateAccountStatus(accountId, 'running', { lastError: result.error });
+        onLog(`GANTI NOMOR failed: ${result.error}`, 'error');
+      }
+
+      return result;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      onLog(`GANTI NOMOR error: ${msg}`, 'error');
+      await updateAccountStatus(accountId, 'running', { lastError: msg });
+      return { success: false, changed: {}, error: msg };
+    }
   }
 }
 

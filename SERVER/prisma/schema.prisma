@@ -10,14 +10,17 @@ datasource db {
 model Account {
   id        Int      @id @default(autoincrement())
   provider  String   // NUKE, VICTORY, PAY4D
-  feature   String   @default("NTO") // NTO, TARIKDB
+  feature   String   @default("NTO") // NTO, TARIKDB, LIVEREPORT
   name      String
   panelUrl  String
   username  String
   password  String
   pinCode      String?
   twoFaSecret  String?
-  proxy        String?  // HTTP/SOCKS5 proxy, format: http://user:pass@host:port or socks5://host:port
+  proxy           String?  // HTTP/SOCKS5 proxy, format: http://user:pass@host:port or socks5://host:port
+  uplineUsername  String?  // Upline username filter for Live Report (e.g., "teammkt", "teamreborn")
+  cuttlyLinkCs   String?  // CUTT.LY shortlink URL for CS WhatsApp
+  cuttlyLinkMst  String?  // CUTT.LY shortlink URL for MST WhatsApp
   status    String   @default("idle") // idle, starting, logging_in, running, checking_nto, waiting_otp, error, stopped
   lastNto   String?
   lastError String?

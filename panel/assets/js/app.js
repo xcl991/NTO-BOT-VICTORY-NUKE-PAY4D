@@ -4,6 +4,7 @@ const state = {
   currentSection: 'dashboard',
   accounts: { NUKE: [], VICTORY: [], PAY4D: [] },
   tarikdbAccounts: { NUKE: [], VICTORY: [], PAY4D: [] },
+  gantinomorAccounts: { NUKE: [], CUTTLY: [] },
 };
 
 const PROVIDERS = [
@@ -16,6 +17,11 @@ const TARIKDB_PROVIDERS = [
   { key: 'NUKE', label: 'NUKE', icon: 'fa-bolt', color: 'red', defaultUrl: 'https://cpt77.nukepanel.com', feature: 'TARIKDB' },
   { key: 'VICTORY', label: 'VICTORY', icon: 'fa-trophy', color: 'yellow', defaultUrl: '', feature: 'TARIKDB' },
   { key: 'PAY4D', label: 'PAY4D', icon: 'fa-credit-card', color: 'green', defaultUrl: '', feature: 'TARIKDB' },
+];
+
+const GANTINOMOR_PROVIDERS = [
+  { key: 'NUKE', label: 'NUKE', icon: 'fa-bolt', color: 'red', defaultUrl: 'https://cpt77.nukepanel.com', feature: 'GANTINOMOR' },
+  { key: 'CUTTLY', label: 'CUTT.LY', icon: 'fa-link', color: 'blue', defaultUrl: 'https://cutt.ly', feature: 'GANTINOMOR' },
 ];
 
 // ==================== DARK MODE ====================
@@ -73,6 +79,13 @@ window.showSection = function(sectionId, element) {
     case 'tarikdb-victory': loadProviderAccounts('VICTORY', 'TARIKDB'); break;
     case 'tarikdb-pay4d': loadProviderAccounts('PAY4D', 'TARIKDB'); break;
     case 'tarikdb-scheduler': loadSchedulerSettings(); break;
+    case 'livereport-scheduler': loadLiveReportSchedulerSettings(); break;
+    case 'livereport-nuke': loadProviderLiveReport('NUKE'); break;
+    case 'livereport-victory': loadProviderLiveReport('VICTORY'); break;
+    case 'livereport-pay4d': loadProviderLiveReport('PAY4D'); break;
+    case 'gantinomor-nuke': loadProviderAccounts('NUKE', 'GANTINOMOR'); break;
+    case 'gantinomor-cuttly': loadProviderAccounts('CUTTLY', 'GANTINOMOR'); break;
+    case 'gantinomor-settings': loadGantiNomorSettings(); break;
     case 'nto-results': loadNtoResults(); break;
     case 'bot-activity': loadActivity(); loadActiveBots(); break;
     case 'settings': loadSettings(); break;
@@ -129,14 +142,17 @@ function escapeHtml(text) {
 
 // ==================== RENDER PROVIDER SECTIONS ====================
 function renderProviderSections() {
-  // Render both NTO and TARIKDB sections
+  // Render NTO, TARIKDB and GANTINOMOR sections
   const allSections = [
     ...PROVIDERS.map(p => ({ ...p, sectionPrefix: 'provider', idPrefix: p.key, featureLabel: 'NTO' })),
     ...TARIKDB_PROVIDERS.map(p => ({ ...p, sectionPrefix: 'tarikdb', idPrefix: `TARIKDB_${p.key}`, featureLabel: 'TARIK DB' })),
+    ...GANTINOMOR_PROVIDERS.map(p => ({ ...p, sectionPrefix: 'gantinomor', idPrefix: `GANTINOMOR_${p.key}`, featureLabel: 'GANTI NOMOR' })),
   ];
 
   for (const p of allSections) {
-    const sectionId = p.sectionPrefix === 'tarikdb' ? `tarikdb-${p.key.toLowerCase()}` : `provider-${p.key.toLowerCase()}`;
+    const sectionId = p.sectionPrefix === 'tarikdb' ? `tarikdb-${p.key.toLowerCase()}`
+      : p.sectionPrefix === 'gantinomor' ? `gantinomor-${p.key.toLowerCase()}`
+      : `provider-${p.key.toLowerCase()}`;
     const el = document.getElementById(sectionId);
     if (!el) continue;
     const uid = p.idPrefix; // Unique prefix for element IDs (e.g., "NUKE" or "TARIKDB_NUKE")
@@ -209,6 +225,14 @@ function renderProviderSections() {
           ${p.key === 'NUKE' ? `<div>
             <label class="block text-sm font-medium text-gray-700 mb-1">2FA Secret (TOTP)</label>
             <input type="text" id="${uid}NewTwoFaSecret" class="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="JBSWY3DPEHPK3PXP">
+          </div>` : ''}
+          ${p.key === 'CUTTLY' ? `<div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">CS Link <span class="text-gray-400">(shortlink CS WhatsApp)</span></label>
+            <input type="url" id="${uid}NewCsLink" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="https://cutt.ly/cs-link">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">MST Link <span class="text-gray-400">(shortlink MST WhatsApp)</span></label>
+            <input type="url" id="${uid}NewMstLink" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="https://cutt.ly/mst-link">
           </div>` : ''}
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Proxy <span class="text-gray-400">(optional)</span></label>
@@ -332,6 +356,16 @@ async function loadDashboard() {
         }
       }
     } catch (e) { /* non-critical */ }
+
+    // Load GANTINOMOR sidebar counts
+    try {
+      const gnRes = await api.dashboard.getStats('GANTINOMOR');
+      if (gnRes.success) {
+        for (const p of gnRes.data.providers) {
+          setText(`navGantinomor${capitalize(p.provider.toLowerCase())}Count`, p.total);
+        }
+      }
+    } catch (e) { /* non-critical */ }
   } catch (e) {
     console.error('Dashboard load error:', e);
   }
@@ -377,8 +411,8 @@ function renderActivityList(containerId, activities) {
 // ==================== PROVIDER ACCOUNTS ====================
 async function loadProviderAccounts(provider, feature) {
   feature = feature || 'NTO';
-  const uid = feature === 'TARIKDB' ? `TARIKDB_${provider}` : provider;
-  const stateKey = feature === 'TARIKDB' ? 'tarikdbAccounts' : 'accounts';
+  const uid = feature === 'TARIKDB' ? `TARIKDB_${provider}` : feature === 'GANTINOMOR' ? `GANTINOMOR_${provider}` : provider;
+  const stateKey = feature === 'TARIKDB' ? 'tarikdbAccounts' : feature === 'GANTINOMOR' ? 'gantinomorAccounts' : 'accounts';
   try {
     const res = await api.accounts.list(provider, feature);
     if (res.success) {
@@ -487,6 +521,9 @@ function parseUid(uid) {
   if (uid.startsWith('TARIKDB_')) {
     return { provider: uid.replace('TARIKDB_', ''), feature: 'TARIKDB' };
   }
+  if (uid.startsWith('GANTINOMOR_')) {
+    return { provider: uid.replace('GANTINOMOR_', ''), feature: 'GANTINOMOR' };
+  }
   return { provider: uid, feature: 'NTO' };
 }
 
@@ -498,6 +535,8 @@ window.createAccount = async function(uid) {
   const password = document.getElementById(`${uid}NewPassword`)?.value.trim();
   const pinCode = document.getElementById(`${uid}NewPinCode`)?.value.trim();
   const twoFaSecret = document.getElementById(`${uid}NewTwoFaSecret`)?.value.trim();
+  const csLink = document.getElementById(`${uid}NewCsLink`)?.value.trim();
+  const mstLink = document.getElementById(`${uid}NewMstLink`)?.value.trim();
   const proxyRaw = document.getElementById(`${uid}NewProxy`)?.value.trim();
   const proxyType = document.getElementById(`${uid}NewProxyType`)?.value || 'http';
   const proxy = proxyRaw ? buildProxyUrl(proxyType, proxyRaw) : '';
@@ -508,6 +547,8 @@ window.createAccount = async function(uid) {
   const payload = { provider, feature, name, panelUrl, username, password };
   if (pinCode) payload.pinCode = pinCode;
   if (twoFaSecret) payload.twoFaSecret = twoFaSecret;
+  if (csLink) payload.cuttlyLinkCs = csLink;
+  if (mstLink) payload.cuttlyLinkMst = mstLink;
   if (proxy) payload.proxy = proxy;
   try {
     await api.accounts.create(payload);
@@ -519,6 +560,10 @@ window.createAccount = async function(uid) {
     if (pinInput) pinInput.value = '';
     const twoFaInput = document.getElementById(`${uid}NewTwoFaSecret`);
     if (twoFaInput) twoFaInput.value = '';
+    const csLinkInput = document.getElementById(`${uid}NewCsLink`);
+    if (csLinkInput) csLinkInput.value = '';
+    const mstLinkInput = document.getElementById(`${uid}NewMstLink`);
+    if (mstLinkInput) mstLinkInput.value = '';
     const proxyInput = document.getElementById(`${uid}NewProxy`);
     if (proxyInput) proxyInput.value = '';
     const proxyTypeSelect = document.getElementById(`${uid}NewProxyType`);
@@ -548,7 +593,7 @@ window.deleteAccount = function(id, uid) {
 // ==================== EDIT MODAL ====================
 window.showEditModal = function(id, uid) {
   const { provider, feature } = parseUid(uid);
-  const stateKey = feature === 'TARIKDB' ? 'tarikdbAccounts' : 'accounts';
+  const stateKey = feature === 'TARIKDB' ? 'tarikdbAccounts' : feature === 'GANTINOMOR' ? 'gantinomorAccounts' : 'accounts';
   const acc = state[stateKey][provider]?.find(a => a.id === id);
   if (!acc) return;
   document.getElementById('editAccountId').value = acc.id;
@@ -573,6 +618,31 @@ window.showEditModal = function(id, uid) {
     twoFaGroup.classList.remove('hidden');
   } else {
     twoFaGroup.classList.add('hidden');
+  }
+  // Show upline field for LIVEREPORT accounts
+  const uplineGroup = document.getElementById('editUplineGroup');
+  const uplineInput = document.getElementById('editAccountUpline');
+  if (uplineGroup && uplineInput) {
+    if (acc.uplineUsername || feature === 'LIVEREPORT') {
+      uplineGroup.classList.remove('hidden');
+      uplineInput.value = acc.uplineUsername || '';
+    } else {
+      uplineGroup.classList.add('hidden');
+      uplineInput.value = '';
+    }
+  }
+  // Show CUTT.LY link fields for CUTTLY accounts
+  const cuttlyLinksGroup = document.getElementById('editCuttlyLinksGroup');
+  if (cuttlyLinksGroup) {
+    if (provider === 'CUTTLY' || uid.includes('CUTTLY')) {
+      cuttlyLinksGroup.classList.remove('hidden');
+      document.getElementById('editAccountCsLink').value = acc.cuttlyLinkCs || '';
+      document.getElementById('editAccountMstLink').value = acc.cuttlyLinkMst || '';
+    } else {
+      cuttlyLinksGroup.classList.add('hidden');
+      document.getElementById('editAccountCsLink').value = '';
+      document.getElementById('editAccountMstLink').value = '';
+    }
   }
   document.getElementById('editAccountModal').classList.remove('hidden');
 };
@@ -599,6 +669,12 @@ window.saveAccountEdit = async function() {
   const editProxyRaw = document.getElementById('editAccountProxy').value.trim();
   const editProxyType = document.getElementById('editAccountProxyType').value || 'http';
   data.proxy = editProxyRaw ? buildProxyUrl(editProxyType, editProxyRaw) : '';
+  const uplineVal = document.getElementById('editAccountUpline')?.value?.trim();
+  if (uplineVal !== undefined) data.uplineUsername = uplineVal || '';
+  const csLinkVal = document.getElementById('editAccountCsLink')?.value?.trim();
+  const mstLinkVal = document.getElementById('editAccountMstLink')?.value?.trim();
+  if (csLinkVal !== undefined) data.cuttlyLinkCs = csLinkVal || '';
+  if (mstLinkVal !== undefined) data.cuttlyLinkMst = mstLinkVal || '';
   if (!data.name) { showNotification('Name is required', 'warning'); return; }
   try {
     await api.accounts.update(id, data);
@@ -1149,6 +1225,684 @@ window.runSchedulerNow = function() {
   }, 'Run Scheduler');
 };
 
+// ==================== LIVE REPORT SCHEDULER ====================
+async function loadLiveReportSchedulerSettings() {
+  try {
+    const settingsRes = await api.settings.list();
+    if (!settingsRes.success) return;
+
+    for (const s of settingsRes.data) {
+      switch (s.key) {
+        case 'livereport.scheduler.enabled': setCheckbox('lrSchedulerEnabled', s.value === 'true'); break;
+        case 'livereport.scheduler.interval': setInput('lrInterval', s.value || '60'); break;
+        case 'livereport.scheduler.dailyRecapTime': setInput('lrDailyRecapTime', s.value || '00:10'); break;
+        case 'livereport.scheduler.weeklyRecap': setCheckbox('lrWeeklyRecap', s.value !== 'false'); break;
+        case 'livereport.scheduler.monthlyRecap': setCheckbox('lrMonthlyRecap', s.value !== 'false'); break;
+        case 'notification.telegramChatIdLiveReport': setInput('lrTelegramChatId', s.value || ''); break;
+        case 'notification.telegramBotTokenLiveReport': setInput('lrTelegramBotToken', s.value || ''); break;
+      }
+    }
+
+    // Load LIVEREPORT accounts
+    const accountsRes = await api.accounts.list(undefined, 'LIVEREPORT');
+    const accountList = document.getElementById('lrAccountList');
+    if (!accountList) return;
+
+    const accounts = accountsRes.success ? accountsRes.data : [];
+    if (accounts.length === 0) {
+      accountList.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Belum ada akun LIVE REPORT. Buat akun Victory dengan feature LIVEREPORT.</p>';
+      updateLrCounter();
+      checkLiveReportSchedulerStatus();
+      return;
+    }
+
+    let selectedIds = [];
+    const idsSetting = settingsRes.data.find(s => s.key === 'livereport.scheduler.accountIds');
+    try { selectedIds = JSON.parse(idsSetting?.value || '[]'); } catch { selectedIds = []; }
+
+    accountList.innerHTML = accounts.map(acc => {
+      const checked = selectedIds.includes(acc.id) ? 'checked' : '';
+      return `<div class="lr-account-row flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50" data-name="${escapeHtml(acc.name.toLowerCase())}">
+        <input type="checkbox" class="lr-account-cb h-4 w-4 rounded text-emerald-600" value="${acc.id}" ${checked} onchange="saveLiveReportAccounts()">
+        <span class="text-sm truncate min-w-0 flex-shrink-0" style="max-width:110px">${escapeHtml(acc.name)}</span>
+        <input type="text" class="lr-upline-input flex-1 px-2 py-0.5 border border-gray-200 rounded text-xs" value="${escapeHtml(acc.uplineUsername || '')}" placeholder="teammkt,teamreborn" data-account-id="${acc.id}" onchange="saveLrUpline(this)">
+        <button onclick="runLrSingleAccount(${acc.id}, '${escapeHtml(acc.name)}')" title="Run Live Report" class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs"><i class="fas fa-play"></i></button>
+      </div>`;
+    }).join('');
+
+    updateLrCounter();
+    checkLiveReportSchedulerStatus();
+    loadNameMapping();
+    loadBlacklist();
+  } catch (e) {
+    console.error('loadLiveReportSchedulerSettings error:', e);
+  }
+}
+
+window.saveLiveReportAccounts = async function() {
+  const ids = Array.from(document.querySelectorAll('.lr-account-cb:checked')).map(cb => Number(cb.value));
+  updateLrCounter();
+  try {
+    await api.settings.update('livereport.scheduler.accountIds', JSON.stringify(ids));
+    showNotification(`${ids.length} akun dipilih untuk Live Report`, 'success', 1500);
+  } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+};
+
+window.saveLrUpline = async function(input) {
+  const accountId = Number(input.dataset.accountId);
+  const upline = input.value.trim();
+  try {
+    await api.accounts.update(accountId, { uplineUsername: upline });
+    showNotification(`Upline updated: ${upline || '(kosong)'}`, 'success', 1500);
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
+};
+
+window.filterLiveReportAccounts = function() {
+  const query = (document.getElementById('lrAccountSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.lr-account-row').forEach(row => {
+    row.style.display = !query || row.dataset.name.includes(query) ? '' : 'none';
+  });
+};
+
+window.selectAllLiveReportAccounts = function(selectAll) {
+  const query = (document.getElementById('lrAccountSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.lr-account-row').forEach(row => {
+    if (!query || row.dataset.name.includes(query)) {
+      const cb = row.querySelector('.lr-account-cb');
+      if (cb) cb.checked = selectAll;
+    }
+  });
+  saveLiveReportAccounts();
+};
+
+function updateLrCounter() {
+  const total = document.querySelectorAll('.lr-account-cb').length;
+  const checked = document.querySelectorAll('.lr-account-cb:checked').length;
+  const el = document.getElementById('lrSelectedCount');
+  if (el) el.textContent = `${checked}/${total} dipilih`;
+}
+
+window.saveLiveReportSettings = async function() {
+  try {
+    const enabled = document.getElementById('lrSchedulerEnabled')?.checked;
+    const interval = document.getElementById('lrInterval')?.value || '60';
+    const dailyTime = document.getElementById('lrDailyRecapTime')?.value || '00:10';
+    const weeklyRecap = document.getElementById('lrWeeklyRecap')?.checked;
+    const monthlyRecap = document.getElementById('lrMonthlyRecap')?.checked;
+    const chatId = document.getElementById('lrTelegramChatId')?.value || '';
+    const botToken = document.getElementById('lrTelegramBotToken')?.value || '';
+
+    await Promise.all([
+      api.settings.update('livereport.scheduler.enabled', String(!!enabled)),
+      api.settings.update('livereport.scheduler.interval', interval),
+      api.settings.update('livereport.scheduler.dailyRecapTime', dailyTime),
+      api.settings.update('livereport.scheduler.weeklyRecap', String(!!weeklyRecap)),
+      api.settings.update('livereport.scheduler.monthlyRecap', String(!!monthlyRecap)),
+      api.settings.update('notification.telegramChatIdLiveReport', chatId),
+      api.settings.update('notification.telegramBotTokenLiveReport', botToken),
+    ]);
+
+    showNotification('Settings saved', 'success', 1500);
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
+};
+
+window.checkLiveReportSchedulerStatus = async function() {
+  const statusEl = document.getElementById('lrSchedulerStatus');
+  const lastRunEl = document.getElementById('lrLastRun');
+  const btn = document.getElementById('lrSchedulerToggleBtn');
+  if (!statusEl || !btn) return;
+
+  try {
+    const res = await api.get('/settings/livereport-scheduler/status');
+    if (res.success) {
+      const d = res.data;
+      if (d.running) {
+        statusEl.textContent = d.executing ? 'Executing...' : 'Running';
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700';
+        btn.innerHTML = '<i class="fas fa-stop mr-1"></i>Stop';
+        btn.className = 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium';
+        btn.dataset.running = 'true';
+      } else {
+        statusEl.textContent = 'Stopped';
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600';
+        btn.innerHTML = '<i class="fas fa-play mr-1"></i>Start';
+        btn.className = 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium';
+        btn.dataset.running = 'false';
+      }
+
+      if (lastRunEl && d.lastRun) {
+        const ts = new Date(d.lastRun.timestamp).toLocaleString('id-ID');
+        lastRunEl.innerHTML = `<span class="text-emerald-600">Last run: ${ts}</span>`;
+      }
+    }
+  } catch (e) {
+    statusEl.textContent = 'Error';
+    statusEl.className = 'text-xs px-2 py-1 rounded-full bg-red-100 text-red-700';
+  }
+};
+
+window.toggleLiveReportScheduler = async function() {
+  const btn = document.getElementById('lrSchedulerToggleBtn');
+  const isRunning = btn?.dataset.running === 'true';
+
+  try {
+    if (isRunning) {
+      await api.post('/settings/livereport-scheduler/stop');
+      showNotification('Live Report scheduler stopped', 'warning');
+    } else {
+      await api.post('/settings/livereport-scheduler/start');
+      showNotification('Live Report scheduler started', 'success');
+    }
+    setTimeout(() => checkLiveReportSchedulerStatus(), 500);
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
+};
+
+window.runLiveReportNow = function() {
+  showConfirmModal('Run Live Report sekarang?', async () => {
+    try {
+      const res = await api.post('/settings/livereport-scheduler/run-now');
+      showNotification(res.message || 'Live Report triggered!', 'success');
+      setTimeout(() => checkLiveReportSchedulerStatus(), 2000);
+    } catch (e) {
+      showNotification('Error: ' + e.message, 'error');
+    }
+  }, 'Run Live Report');
+};
+
+window.runLrSingleAccount = function(accountId, accountName) {
+  showConfirmModal(`Run Live Report untuk "${accountName}"?`, async () => {
+    try {
+      const res = await api.post('/settings/livereport-scheduler/run-now', { accountId });
+      showNotification(res.message || 'Live Report triggered!', 'success');
+      setTimeout(() => checkLiveReportSchedulerStatus(), 2000);
+    } catch (e) {
+      showNotification('Error: ' + e.message, 'error');
+    }
+  }, 'Run Live Report');
+};
+
+window.toggleLrAddForm = function() {
+  document.getElementById('lrAddForm')?.classList.toggle('hidden');
+};
+
+window.createLrAccount = async function() {
+  const name = document.getElementById('lrNewName')?.value.trim();
+  const panelUrl = document.getElementById('lrNewPanelUrl')?.value.trim();
+  const username = document.getElementById('lrNewUsername')?.value.trim();
+  const password = document.getElementById('lrNewPassword')?.value.trim();
+  const uplineUsername = document.getElementById('lrNewUpline')?.value.trim();
+  const proxyType = document.getElementById('lrNewProxyType')?.value || 'http';
+  const proxyRaw = document.getElementById('lrNewProxy')?.value.trim();
+
+  if (!name || !panelUrl || !username || !password || !uplineUsername) {
+    showNotification('Semua field wajib diisi', 'warning');
+    return;
+  }
+
+  const payload = {
+    provider: 'VICTORY',
+    feature: 'LIVEREPORT',
+    name,
+    panelUrl,
+    username,
+    password,
+    uplineUsername,
+  };
+  if (proxyRaw) payload.proxy = buildProxyUrl(proxyType, proxyRaw);
+
+  try {
+    await api.accounts.create(payload);
+    showNotification(`Account "${name}" created`, 'success');
+    document.getElementById('lrNewName').value = '';
+    document.getElementById('lrNewUsername').value = '';
+    document.getElementById('lrNewPassword').value = '';
+    document.getElementById('lrNewUpline').value = '';
+    document.getElementById('lrNewProxy').value = '';
+    toggleLrAddForm();
+    loadLiveReportSchedulerSettings();
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
+};
+
+// ============================================================
+// Name Mapping (Username → Nama)
+// ============================================================
+
+let _nameMapping = {};
+
+async function loadNameMapping() {
+  try {
+    const res = await api.settings.get('livereport.nameMapping');
+    if (res.success && res.data?.value) {
+      _nameMapping = JSON.parse(res.data.value);
+    }
+  } catch { _nameMapping = {}; }
+  renderNameMappingTable();
+}
+
+function renderNameMappingTable() {
+  const tbody = document.getElementById('nmTableBody');
+  const countEl = document.getElementById('nmCount');
+  if (!tbody) return;
+
+  const entries = Object.entries(_nameMapping).sort((a, b) => a[0].localeCompare(b[0]));
+  if (countEl) countEl.textContent = `${entries.length} mapping`;
+
+  if (entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="px-3 py-4 text-center text-gray-400">Belum ada name mapping</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = entries.map(([username, nama]) => `
+    <tr class="border-t border-gray-100 hover:bg-gray-50">
+      <td class="px-3 py-1.5 font-mono text-xs">${escapeHtml(username)}</td>
+      <td class="px-3 py-1.5 text-sm">${escapeHtml(nama)}</td>
+      <td class="px-3 py-1.5 text-center">
+        <button onclick="deleteNameMapping('${escapeHtml(username)}')" class="text-red-500 hover:text-red-700 text-xs" title="Hapus"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+async function saveNameMapping() {
+  try {
+    await api.settings.update('livereport.nameMapping', JSON.stringify(_nameMapping));
+  } catch (e) {
+    showNotification('Error saving mapping: ' + e.message, 'error');
+  }
+}
+
+window.uploadNameMapping = async function(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/settings/livereport-namemapping/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.success) {
+      showNotification(`${data.data.imported} nama diimport (total: ${data.data.total})`, 'success');
+      await loadNameMapping();
+    } else {
+      showNotification(data.error?.message || 'Upload failed', 'error');
+    }
+  } catch (e) {
+    showNotification('Upload error: ' + e.message, 'error');
+  }
+  input.value = '';
+};
+
+window.addNameMappingRow = function() {
+  const username = prompt('Username (lowercase):');
+  if (!username) return;
+  const nama = prompt('Nama asli:');
+  if (!nama) return;
+
+  _nameMapping[username.trim().toLowerCase()] = nama.trim();
+  saveNameMapping();
+  renderNameMappingTable();
+  showNotification(`Mapping ditambah: ${username} → ${nama}`, 'success', 1500);
+};
+
+window.deleteNameMapping = function(username) {
+  delete _nameMapping[username];
+  saveNameMapping();
+  renderNameMappingTable();
+  showNotification(`Mapping "${username}" dihapus`, 'warning', 1500);
+};
+
+// ============================================================
+// Blacklist Username (ALEXIS17 Live Report)
+// ============================================================
+
+let _blacklist = [];
+
+async function loadBlacklist() {
+  try {
+    const res = await api.settings.get('livereport.blacklist');
+    if (res.success && res.data?.value) {
+      _blacklist = JSON.parse(res.data.value);
+    }
+  } catch { _blacklist = []; }
+  renderBlacklist();
+}
+
+function renderBlacklist() {
+  const container = document.getElementById('blList');
+  const countEl = document.getElementById('blCount');
+  if (!container) return;
+  if (countEl) countEl.textContent = `${_blacklist.length} user`;
+
+  if (_blacklist.length === 0) {
+    container.innerHTML = '<span class="text-sm text-gray-400">Belum ada blacklist</span>';
+    return;
+  }
+
+  container.innerHTML = _blacklist.map(u => `
+    <span class="inline-flex items-center gap-1 px-3 py-1 bg-red-50 text-red-700 rounded-full text-sm border border-red-200">
+      ${escapeHtml(u)}
+      <button onclick="removeBlacklistEntry('${escapeHtml(u)}')" class="ml-1 text-red-400 hover:text-red-600"><i class="fas fa-times text-xs"></i></button>
+    </span>`).join('');
+}
+
+async function saveBlacklist() {
+  try {
+    await api.settings.update('livereport.blacklist', JSON.stringify(_blacklist));
+  } catch (e) {
+    showNotification('Error saving blacklist: ' + e.message, 'error');
+  }
+}
+
+window.addBlacklistEntry = function() {
+  const input = document.getElementById('blAddInput');
+  const username = (input?.value || '').trim().toLowerCase();
+  if (!username) return;
+
+  if (_blacklist.includes(username)) {
+    showNotification(`"${username}" sudah ada di blacklist`, 'warning', 1500);
+    return;
+  }
+
+  _blacklist.push(username);
+  _blacklist.sort();
+  saveBlacklist();
+  renderBlacklist();
+  input.value = '';
+  showNotification(`"${username}" ditambah ke blacklist`, 'success', 1500);
+};
+
+window.removeBlacklistEntry = function(username) {
+  _blacklist = _blacklist.filter(u => u !== username);
+  saveBlacklist();
+  renderBlacklist();
+  showNotification(`"${username}" dihapus dari blacklist`, 'warning', 1500);
+};
+
+// ============================================================
+// Provider NTO Live Report Scheduler (NUKE, VICTORY, PAY4D)
+// ============================================================
+
+const GAME_CATEGORIES = ['SLOT', 'CASINO', 'SPORTS', 'GAMES'];
+
+async function loadProviderLiveReport(provider) {
+  const key = provider.toLowerCase();
+  const sectionId = `livereport-${key}`;
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+
+  const colorMap = { NUKE: 'red', VICTORY: 'blue', PAY4D: 'yellow' };
+  const color = colorMap[provider] || 'emerald';
+
+  // Render UI
+  section.innerHTML = `
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+      <div>
+        <h2 class="text-2xl font-bold"><i class="fas fa-chart-line mr-2 text-${color}-500"></i>Live Report ${provider}</h2>
+        <p class="text-sm text-gray-500 mt-1">NTO auto-check scheduler — ${provider} accounts</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="toggleProviderLrScheduler('${provider}')" id="plr-toggle-${key}" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium">
+          <i class="fas fa-play mr-1"></i>Start
+        </button>
+        <button onclick="runProviderLrNow('${provider}')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+          <i class="fas fa-bolt mr-1"></i>Run Sekarang
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Config -->
+      <div class="bg-white rounded-xl shadow-sm p-6">
+        <h3 class="font-bold text-lg mb-4"><i class="fas fa-cog mr-2 text-gray-500"></i>Konfigurasi</h3>
+
+        <div class="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
+          <div>
+            <p class="font-medium">Enable Scheduler</p>
+            <p class="text-xs text-gray-500">Auto-run NTO check setiap interval</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="plr-enabled-${key}" class="sr-only peer" onchange="saveProviderLrSettings('${provider}')">
+            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+          </label>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-1">Interval (menit)</label>
+          <input type="number" id="plr-interval-${key}" value="60" min="10" max="1440" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" onchange="saveProviderLrSettings('${provider}')">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-1">Game Categories</label>
+          <div class="flex flex-wrap gap-2">
+            ${GAME_CATEGORIES.map(g => `
+              <label class="flex items-center gap-1 text-sm">
+                <input type="checkbox" class="plr-game-${key} h-4 w-4 rounded" value="${g}" checked onchange="saveProviderLrSettings('${provider}')">
+                ${g}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="p-3 bg-blue-50 rounded-lg text-xs text-blue-700">
+          <i class="fas fa-info-circle mr-1"></i>Menggunakan Telegram Bot Token & Chat ID dari Settings (NTO group)
+        </div>
+      </div>
+
+      <!-- Account Picker + Status -->
+      <div class="bg-white rounded-xl shadow-sm p-6">
+        <h3 class="font-bold text-lg mb-4"><i class="fas fa-users mr-2 text-gray-500"></i>Pilih Account ${provider}</h3>
+        <input type="text" placeholder="Cari account..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-3" oninput="filterPlrAccounts('${provider}', this.value)">
+        <div class="flex gap-2 mb-3">
+          <button onclick="selectAllPlrAccounts('${provider}', true)" class="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">Pilih Semua</button>
+          <button onclick="selectAllPlrAccounts('${provider}', false)" class="text-xs px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">Hapus Semua</button>
+          <span class="ml-auto text-xs text-gray-500" id="plr-count-${key}">0/0 dipilih</span>
+        </div>
+        <div id="plr-accounts-${key}" class="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 mb-4">
+          <div class="p-3 text-center text-gray-400 text-sm">Loading...</div>
+        </div>
+
+        <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium">Status</span>
+            <span id="plr-status-${key}" class="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600">Stopped</span>
+          </div>
+          <div id="plr-lastrun-${key}" class="text-xs text-gray-500">Belum pernah dijalankan</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6 mt-6">
+      <h3 class="font-bold text-lg mb-4"><i class="fas fa-terminal mr-2 text-gray-500"></i>Live Log</h3>
+      <div id="plr-log-${key}" class="h-48 overflow-y-auto bg-gray-900 rounded-lg p-3 font-mono text-xs text-green-400 space-y-1">
+        <div class="text-gray-500">Waiting for scheduler activity...</div>
+      </div>
+    </div>
+  `;
+
+  // Load settings
+  try {
+    const settingsRes = await api.settings.list();
+    if (!settingsRes.success) return;
+
+    for (const s of settingsRes.data) {
+      if (s.key === `livereport.${key}.scheduler.enabled`) {
+        const el = document.getElementById(`plr-enabled-${key}`);
+        if (el) el.checked = s.value === 'true';
+      }
+      if (s.key === `livereport.${key}.scheduler.interval`) {
+        const el = document.getElementById(`plr-interval-${key}`);
+        if (el) el.value = s.value || '60';
+      }
+      if (s.key === `livereport.${key}.scheduler.gameCategories`) {
+        try {
+          const cats = JSON.parse(s.value);
+          document.querySelectorAll(`.plr-game-${key}`).forEach(cb => {
+            cb.checked = cats.includes(cb.value);
+          });
+        } catch { /* ignore */ }
+      }
+    }
+
+    // Load accounts for this provider (NTO feature)
+    const accountsRes = await api.accounts.list(provider, 'NTO');
+    const accountList = document.getElementById(`plr-accounts-${key}`);
+    if (!accountList) return;
+
+    const accounts = accountsRes.success ? accountsRes.data : [];
+    if (accounts.length === 0) {
+      accountList.innerHTML = `<p class="text-xs text-gray-400 text-center py-2">Belum ada akun ${provider} NTO.</p>`;
+      updatePlrCounter(key);
+      checkPlrStatus(provider);
+      return;
+    }
+
+    let selectedIds = [];
+    const idsSetting = settingsRes.data.find(s => s.key === `livereport.${key}.scheduler.accountIds`);
+    try { selectedIds = JSON.parse(idsSetting?.value || '[]'); } catch { selectedIds = []; }
+
+    accountList.innerHTML = accounts.map(acc => {
+      const checked = selectedIds.includes(acc.id) ? 'checked' : '';
+      return `<div class="plr-row-${key} flex items-center gap-2 px-3 py-2 hover:bg-gray-50" data-name="${escapeHtml(acc.name.toLowerCase())}">
+        <input type="checkbox" class="plr-cb-${key} h-4 w-4 rounded text-emerald-600" value="${acc.id}" ${checked} onchange="saveProviderLrAccounts('${provider}')">
+        <span class="text-sm">${escapeHtml(acc.name)}</span>
+      </div>`;
+    }).join('');
+
+    updatePlrCounter(key);
+    checkPlrStatus(provider);
+  } catch (e) {
+    console.error(`loadProviderLiveReport(${provider}) error:`, e);
+  }
+}
+
+function updatePlrCounter(key) {
+  const total = document.querySelectorAll(`.plr-cb-${key}`).length;
+  const checked = document.querySelectorAll(`.plr-cb-${key}:checked`).length;
+  const el = document.getElementById(`plr-count-${key}`);
+  if (el) el.textContent = `${checked}/${total} dipilih`;
+}
+
+window.saveProviderLrAccounts = async function(provider) {
+  const key = provider.toLowerCase();
+  const ids = Array.from(document.querySelectorAll(`.plr-cb-${key}:checked`)).map(cb => Number(cb.value));
+  updatePlrCounter(key);
+  try {
+    await api.settings.update(`livereport.${key}.scheduler.accountIds`, JSON.stringify(ids));
+    showNotification(`${ids.length} akun dipilih`, 'success', 1500);
+  } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+};
+
+window.saveProviderLrSettings = async function(provider) {
+  const key = provider.toLowerCase();
+  try {
+    const enabled = document.getElementById(`plr-enabled-${key}`)?.checked;
+    const interval = document.getElementById(`plr-interval-${key}`)?.value || '60';
+    const games = Array.from(document.querySelectorAll(`.plr-game-${key}:checked`)).map(cb => cb.value);
+
+    await Promise.all([
+      api.settings.update(`livereport.${key}.scheduler.enabled`, String(!!enabled)),
+      api.settings.update(`livereport.${key}.scheduler.interval`, interval),
+      api.settings.update(`livereport.${key}.scheduler.gameCategories`, JSON.stringify(games)),
+    ]);
+    showNotification('Settings saved', 'success', 1500);
+  } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+};
+
+window.filterPlrAccounts = function(provider, query) {
+  const key = provider.toLowerCase();
+  const q = query.toLowerCase();
+  document.querySelectorAll(`.plr-row-${key}`).forEach(row => {
+    row.style.display = !q || row.dataset.name.includes(q) ? '' : 'none';
+  });
+};
+
+window.selectAllPlrAccounts = function(provider, selectAll) {
+  const key = provider.toLowerCase();
+  document.querySelectorAll(`.plr-row-${key}`).forEach(row => {
+    if (row.style.display !== 'none') {
+      const cb = row.querySelector(`.plr-cb-${key}`);
+      if (cb) cb.checked = selectAll;
+    }
+  });
+  saveProviderLrAccounts(provider);
+};
+
+async function checkPlrStatus(provider) {
+  const key = provider.toLowerCase();
+  const statusEl = document.getElementById(`plr-status-${key}`);
+  const lastRunEl = document.getElementById(`plr-lastrun-${key}`);
+  const btn = document.getElementById(`plr-toggle-${key}`);
+  if (!statusEl || !btn) return;
+
+  try {
+    const res = await api.get(`/settings/livereport-${key}-scheduler/status`);
+    if (res.success) {
+      const d = res.data;
+      if (d.running) {
+        statusEl.textContent = d.executing ? 'Executing...' : 'Running';
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-700';
+        btn.innerHTML = '<i class="fas fa-stop mr-1"></i>Stop';
+        btn.className = 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium';
+        btn.dataset.running = 'true';
+      } else {
+        statusEl.textContent = 'Stopped';
+        statusEl.className = 'text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600';
+        btn.innerHTML = '<i class="fas fa-play mr-1"></i>Start';
+        btn.className = 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium';
+        btn.dataset.running = 'false';
+      }
+
+      if (lastRunEl && d.lastRun) {
+        const ts = new Date(d.lastRun.timestamp).toLocaleString('id-ID');
+        lastRunEl.innerHTML = `<span class="text-emerald-600">Last run: ${ts}</span>`;
+      }
+    }
+  } catch (e) {
+    statusEl.textContent = 'Error';
+    statusEl.className = 'text-xs px-2 py-1 rounded-full bg-red-100 text-red-700';
+  }
+}
+
+window.toggleProviderLrScheduler = async function(provider) {
+  const key = provider.toLowerCase();
+  const btn = document.getElementById(`plr-toggle-${key}`);
+  const isRunning = btn?.dataset.running === 'true';
+
+  try {
+    if (isRunning) {
+      await api.post(`/settings/livereport-${key}-scheduler/stop`);
+      showNotification(`${provider} Live Report scheduler stopped`, 'warning');
+    } else {
+      await api.post(`/settings/livereport-${key}-scheduler/start`);
+      showNotification(`${provider} Live Report scheduler started`, 'success');
+    }
+    setTimeout(() => checkPlrStatus(provider), 500);
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  }
+};
+
+window.runProviderLrNow = function(provider) {
+  const key = provider.toLowerCase();
+  showConfirmModal(`Run NTO Live Report ${provider} sekarang?`, async () => {
+    try {
+      const res = await api.post(`/settings/livereport-${key}-scheduler/run-now`);
+      showNotification(res.message || `${provider} Live Report triggered!`, 'success');
+      setTimeout(() => checkPlrStatus(provider), 2000);
+    } catch (e) {
+      showNotification('Error: ' + e.message, 'error');
+    }
+  }, `Run ${provider}`);
+};
+
 window.load2CaptchaBalance = async function() {
   const box = document.getElementById('captchaBalanceBox');
   const val = document.getElementById('captchaBalanceValue');
@@ -1300,6 +2054,10 @@ function setupWebSocketListeners() {
     // Route scheduler/system logs to scheduler log panel
     if (d.provider === 'SYSTEM' && d.message.includes('[Scheduler]')) {
       addLog('schedulerLog', d.message, level);
+    }
+    // Route Live Report logs
+    if (d.provider === 'SYSTEM' && d.message.includes('[LiveReport]')) {
+      addLog('lrLogContainer', d.message, level);
     }
     // Also add to global log
     addLog('globalLog', `[${d.provider}#${d.accountId}] ${d.message}`, level);
@@ -1473,6 +2231,65 @@ ws.on('UPDATE_STATUS', (data) => {
   if (progressText) progressText.textContent = d.message || d.status;
   addLog('globalLog', `[UPDATER] ${d.message || d.status}`, d.status === 'error' ? 'error' : 'info');
 });
+
+// ==================== GANTI NOMOR ====================
+async function loadGantiNomorSettings() {
+  // Trigger settings seed first (ensures new keys exist)
+  try { await api.settings.list(); } catch {}
+  try {
+    const [tokenRes, chatIdRes] = await Promise.all([
+      api.settings.get('notification.telegramBotTokenGantiNomor').catch(() => null),
+      api.settings.get('notification.telegramChatIdGantiNomor').catch(() => null),
+    ]);
+    setInput('gnTelegramBotToken', tokenRes?.data?.value || '');
+    setInput('gnTelegramChatId', chatIdRes?.data?.value || '');
+  } catch {}
+  checkGantiNomorListenerStatus();
+}
+
+window.saveGantiNomorSettings = async function() {
+  const botToken = document.getElementById('gnTelegramBotToken')?.value || '';
+  const chatId = document.getElementById('gnTelegramChatId')?.value || '';
+  try {
+    await Promise.all([
+      api.settings.update('notification.telegramBotTokenGantiNomor', botToken, 'string'),
+      api.settings.update('notification.telegramChatIdGantiNomor', chatId, 'string'),
+    ]);
+  } catch (e) {
+    console.error('Save GANTI NOMOR settings error:', e);
+  }
+};
+
+window.checkGantiNomorListenerStatus = async function() {
+  try {
+    const res = await fetch('/api/settings/gantinomor-listener/status');
+    const data = await res.json();
+    const running = data?.data?.running || false;
+    const dot = document.getElementById('gnListenerDot');
+    const text = document.getElementById('gnListenerText');
+    const btn = document.getElementById('gnListenerToggleBtn');
+    if (dot) dot.className = `w-3 h-3 rounded-full ${running ? 'bg-green-500' : 'bg-gray-400'}`;
+    if (text) text.textContent = running ? 'Running' : 'Stopped';
+    if (btn) {
+      btn.innerHTML = running ? '<i class="fas fa-stop mr-1"></i>Stop' : '<i class="fas fa-play mr-1"></i>Start';
+      btn.className = `px-4 py-2 rounded-lg text-sm font-medium text-white ${running ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`;
+    }
+  } catch {}
+};
+
+window.toggleGantiNomorListener = async function() {
+  try {
+    const statusRes = await fetch('/api/settings/gantinomor-listener/status');
+    const statusData = await statusRes.json();
+    const running = statusData?.data?.running || false;
+
+    const endpoint = running ? '/api/settings/gantinomor-listener/stop' : '/api/settings/gantinomor-listener/start';
+    await fetch(endpoint, { method: 'POST' });
+    setTimeout(checkGantiNomorListenerStatus, 500);
+  } catch (e) {
+    console.error('Toggle GANTI NOMOR listener error:', e);
+  }
+};
 
 // ==================== HELPERS ====================
 function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = String(text); }

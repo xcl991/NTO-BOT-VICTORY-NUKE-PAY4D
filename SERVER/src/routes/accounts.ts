@@ -14,7 +14,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (feature) where.feature = String(feature);
   const accounts = await prisma.account.findMany({
     where,
-    select: { id: true, provider: true, feature: true, name: true, panelUrl: true, username: true, pinCode: true, twoFaSecret: true, proxy: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
+    select: { id: true, provider: true, feature: true, name: true, panelUrl: true, username: true, pinCode: true, twoFaSecret: true, proxy: true, uplineUsername: true, cuttlyLinkCs: true, cuttlyLinkMst: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ success: true, data: accounts });
@@ -24,7 +24,7 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const account = await prisma.account.findUnique({
     where: { id: Number(req.params.id) },
-    select: { id: true, provider: true, feature: true, name: true, panelUrl: true, username: true, pinCode: true, twoFaSecret: true, proxy: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
+    select: { id: true, provider: true, feature: true, name: true, panelUrl: true, username: true, pinCode: true, twoFaSecret: true, proxy: true, uplineUsername: true, cuttlyLinkCs: true, cuttlyLinkMst: true, status: true, lastNto: true, lastError: true, isActive: true, createdAt: true, updatedAt: true },
   });
   if (!account) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Account not found' } });
   res.json({ success: true, data: account });
@@ -32,9 +32,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
 // POST /api/accounts
 router.post('/', validate(createAccountSchema), asyncHandler(async (req, res) => {
-  const { provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret, proxy } = req.body;
+  const { provider, feature, name, panelUrl, username, password, pinCode, twoFaSecret, proxy, uplineUsername, cuttlyLinkCs, cuttlyLinkMst } = req.body;
   const account = await prisma.account.create({
-    data: { provider, feature: feature || 'NTO', name, panelUrl, username, password, pinCode, twoFaSecret, proxy: proxy || null },
+    data: { provider, feature: feature || 'NTO', name, panelUrl, username, password, pinCode, twoFaSecret, proxy: proxy || null, uplineUsername: uplineUsername || null, cuttlyLinkCs: cuttlyLinkCs || null, cuttlyLinkMst: cuttlyLinkMst || null },
   });
   await prisma.activityLog.create({
     data: { action: 'account_created', provider, accountId: account.id, details: `Account "${name}" created`, status: 'success' },
@@ -51,9 +51,12 @@ router.put('/:id', validate(updateAccountSchema), asyncHandler(async (req, res) 
   const id = Number(req.params.id);
   const existing = await prisma.account.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Account not found' } });
-  // Normalize proxy: empty string → null (remove proxy)
+  // Normalize optional fields: empty string → null
   const updateData = { ...req.body };
   if ('proxy' in updateData && !updateData.proxy) updateData.proxy = null;
+  if ('uplineUsername' in updateData && !updateData.uplineUsername) updateData.uplineUsername = null;
+  if ('cuttlyLinkCs' in updateData && !updateData.cuttlyLinkCs) updateData.cuttlyLinkCs = null;
+  if ('cuttlyLinkMst' in updateData && !updateData.cuttlyLinkMst) updateData.cuttlyLinkMst = null;
   const account = await prisma.account.update({ where: { id }, data: updateData });
   await prisma.activityLog.create({
     data: { action: 'account_updated', provider: account.provider, accountId: id, details: `Account "${account.name}" updated`, status: 'info' },

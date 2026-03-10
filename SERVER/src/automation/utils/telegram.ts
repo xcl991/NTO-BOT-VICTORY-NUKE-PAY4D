@@ -73,12 +73,16 @@ export async function sendTelegramMessage(text: string, replyToMessageId?: numbe
 /**
  * Send a text message to a specific Telegram chat (for replies to different groups)
  */
-export async function sendTelegramMessageToChat(chatId: string | number, text: string, replyToMessageId?: number): Promise<boolean> {
-  const config = await getTelegramConfig();
-  if (!config) return false;
+export async function sendTelegramMessageToChat(chatId: string | number, text: string, replyToMessageId?: number, botToken?: string): Promise<boolean> {
+  let token = botToken;
+  if (!token) {
+    const config = await getTelegramConfig();
+    if (!config) return false;
+    token = config.botToken;
+  }
 
   try {
-    const url = `${TELEGRAM_API}${config.botToken}/sendMessage`;
+    const url = `${TELEGRAM_API}${token}/sendMessage`;
     const body: any = {
       chat_id: chatId,
       text,
@@ -201,6 +205,55 @@ export async function sendTelegramPhoto(filePath: string, caption?: string): Pro
     return true;
   } catch (error) {
     logger.error('Telegram photo send error', { error });
+    return false;
+  }
+}
+
+/**
+ * Send a photo from a Buffer to a specific Telegram chat.
+ * Used by Live Report to send rendered PNG tables.
+ */
+export async function sendTelegramPhotoBufferToChat(
+  chatId: string | number,
+  pngBuffer: Buffer,
+  caption?: string,
+  filename: string = 'report.png',
+  botToken?: string,
+): Promise<boolean> {
+  const token = botToken || (await getTelegramConfig())?.botToken;
+  if (!token) return false;
+
+  try {
+    const url = `${TELEGRAM_API}${token}/sendPhoto`;
+    const formData = new FormData();
+    formData.append('chat_id', String(chatId));
+    formData.append('photo', new Blob([pngBuffer]), filename);
+    if (caption) formData.append('caption', caption);
+
+    const res = await fetch(url, { method: 'POST', body: formData });
+    const data = await res.json() as any;
+
+    if (!data.ok) {
+      // Fallback: try sending as document (for larger images)
+      logger.warn('sendPhoto failed, trying sendDocument...', { error: data.description });
+      const docUrl = `${TELEGRAM_API}${token}/sendDocument`;
+      const docForm = new FormData();
+      docForm.append('chat_id', String(chatId));
+      docForm.append('document', new Blob([pngBuffer]), filename);
+      if (caption) docForm.append('caption', caption);
+
+      const docRes = await fetch(docUrl, { method: 'POST', body: docForm });
+      const docData = await docRes.json() as any;
+      if (!docData.ok) {
+        logger.error('Telegram sendDocument also failed', { error: docData.description });
+        return false;
+      }
+    }
+
+    logger.info(`Telegram photo buffer sent to ${chatId}`);
+    return true;
+  } catch (error) {
+    logger.error('Telegram photo buffer send error', { error });
     return false;
   }
 }

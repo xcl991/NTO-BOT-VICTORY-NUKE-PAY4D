@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 
-const providerEnum = z.enum(['NUKE', 'VICTORY', 'PAY4D']);
-const featureEnum = z.enum(['NTO', 'TARIKDB']);
+const providerEnum = z.enum(['NUKE', 'VICTORY', 'PAY4D', 'CUTTLY']);
+const featureEnum = z.enum(['NTO', 'TARIKDB', 'LIVEREPORT', 'GANTINOMOR']);
 
 export const createAccountSchema = z.object({
   provider: providerEnum,
@@ -14,6 +14,9 @@ export const createAccountSchema = z.object({
   pinCode: z.string().optional(),
   twoFaSecret: z.string().optional(),
   proxy: z.string().optional(),
+  uplineUsername: z.string().optional(),
+  cuttlyLinkCs: z.string().optional(),
+  cuttlyLinkMst: z.string().optional(),
 });
 
 export const updateAccountSchema = z.object({
@@ -24,6 +27,9 @@ export const updateAccountSchema = z.object({
   pinCode: z.string().optional(),
   twoFaSecret: z.string().optional(),
   proxy: z.string().optional(),
+  uplineUsername: z.string().optional(),
+  cuttlyLinkCs: z.string().optional(),
+  cuttlyLinkMst: z.string().optional(),
 });
 
 export const botStartSchema = z.object({

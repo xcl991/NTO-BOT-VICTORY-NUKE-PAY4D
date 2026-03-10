@@ -1,6 +1,6 @@
 {
   "name": "bot-nto-server",
-  "version": "1.6.0",
+  "version": "1.8.1",
   "private": true,
   "scripts": {
     "dev": "npx tsx watch src/index.ts",

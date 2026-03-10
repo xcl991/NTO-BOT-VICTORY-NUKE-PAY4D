@@ -5,6 +5,9 @@ import { asyncHandler } from '../utils/errors';
 import { validate, settingUpdateSchema } from '../utils/validation';
 import { telegramListener } from '../automation/utils/telegram-listener';
 import { tarikdbScheduler } from '../automation/utils/tarikdb-scheduler';
+import { livereportScheduler } from '../automation/utils/livereport-scheduler';
+import { gantiNomorListener } from '../automation/utils/gantinomor-listener';
+import { nukeLiveReportScheduler, victoryNtoScheduler, pay4dLiveReportScheduler } from '../automation/utils/provider-livereport-scheduler';
 
 const router = Router();
 
@@ -21,17 +24,47 @@ const DEFAULT_SETTINGS: Record<string, { value: string; type: string }> = {
   'tarikdb.scheduler.accountIds': { value: '[]', type: 'json' },
   'notification.adminUserIds': { value: '[]', type: 'json' },
   'notification.telegramChatIdTarikDb': { value: '', type: 'string' },
+  'notification.telegramChatIdLiveReport': { value: '', type: 'string' },
+  'notification.telegramBotTokenLiveReport': { value: '', type: 'string' },
+  'livereport.scheduler.enabled': { value: 'false', type: 'boolean' },
+  'livereport.scheduler.interval': { value: '60', type: 'number' },
+  'livereport.scheduler.accountIds': { value: '[]', type: 'json' },
+  'livereport.scheduler.dailyRecapTime': { value: '00:10', type: 'string' },
+  'livereport.scheduler.weeklyRecap': { value: 'true', type: 'boolean' },
+  'livereport.scheduler.monthlyRecap': { value: 'true', type: 'boolean' },
+  'notification.telegramBotTokenGantiNomor': { value: '', type: 'string' },
+  'notification.telegramChatIdGantiNomor': { value: '', type: 'string' },
+  'livereport.nameMapping': { value: '{}', type: 'json' },
+  'livereport.blacklist': { value: '[]', type: 'json' },
+  // Provider NTO Live Report schedulers
+  'livereport.nuke.scheduler.enabled': { value: 'false', type: 'boolean' },
+  'livereport.nuke.scheduler.interval': { value: '60', type: 'number' },
+  'livereport.nuke.scheduler.accountIds': { value: '[]', type: 'json' },
+  'livereport.nuke.scheduler.gameCategories': { value: '["SLOT","CASINO","SPORTS","GAMES"]', type: 'json' },
+  'livereport.victory.scheduler.enabled': { value: 'false', type: 'boolean' },
+  'livereport.victory.scheduler.interval': { value: '60', type: 'number' },
+  'livereport.victory.scheduler.accountIds': { value: '[]', type: 'json' },
+  'livereport.victory.scheduler.gameCategories': { value: '["SLOT","CASINO","SPORTS","GAMES"]', type: 'json' },
+  'livereport.pay4d.scheduler.enabled': { value: 'false', type: 'boolean' },
+  'livereport.pay4d.scheduler.interval': { value: '60', type: 'number' },
+  'livereport.pay4d.scheduler.accountIds': { value: '[]', type: 'json' },
+  'livereport.pay4d.scheduler.gameCategories': { value: '["SLOT","CASINO","SPORTS","GAMES"]', type: 'json' },
 };
 
 // GET /api/settings
 router.get('/', asyncHandler(async (_req, res) => {
   let settings = await prisma.setting.findMany();
 
-  // Seed defaults if empty
-  if (settings.length === 0) {
-    for (const [key, { value, type }] of Object.entries(DEFAULT_SETTINGS)) {
+  // Seed missing defaults (handles both fresh install and upgrades)
+  const existingKeys = new Set(settings.map(s => s.key));
+  let seeded = false;
+  for (const [key, { value, type }] of Object.entries(DEFAULT_SETTINGS)) {
+    if (!existingKeys.has(key)) {
       await prisma.setting.create({ data: { key, value, type } });
+      seeded = true;
     }
+  }
+  if (seeded) {
     settings = await prisma.setting.findMany();
   }
 
@@ -117,6 +150,174 @@ router.post('/tarikdb-scheduler/run-now', asyncHandler(async (_req, res) => {
   tarikdbScheduler.runNow().catch(e => logger.error(`[Scheduler] runNow error: ${e}`));
   res.json({ success: true, message: 'Scheduler triggered, running in background' });
 }));
+
+// --- Live Report Scheduler Control ---
+
+router.post('/livereport-scheduler/start', asyncHandler(async (_req, res) => {
+  if (livereportScheduler.isRunning()) {
+    return res.json({ success: true, message: 'Live Report scheduler already running' });
+  }
+  livereportScheduler.start();
+  res.json({ success: true, message: 'Live Report scheduler started' });
+}));
+
+router.post('/livereport-scheduler/stop', asyncHandler(async (_req, res) => {
+  livereportScheduler.stop();
+  res.json({ success: true, message: 'Live Report scheduler stopped' });
+}));
+
+router.get('/livereport-scheduler/status', asyncHandler(async (_req, res) => {
+  const lastRunSetting = await prisma.setting.findUnique({ where: { key: 'livereport.scheduler.lastRun' } });
+  let lastRun = null;
+  try { lastRun = lastRunSetting?.value ? JSON.parse(lastRunSetting.value) : null; } catch { /* ignore */ }
+
+  const intervalSetting = await prisma.setting.findUnique({ where: { key: 'livereport.scheduler.interval' } });
+
+  res.json({
+    success: true,
+    data: {
+      running: livereportScheduler.isRunning(),
+      executing: livereportScheduler.isExecuting(),
+      lastRun,
+      intervalMinutes: parseInt(intervalSetting?.value || '60', 10),
+    },
+  });
+}));
+
+router.post('/livereport-scheduler/run-now', asyncHandler(async (req, res) => {
+  if (livereportScheduler.isExecuting()) {
+    return res.status(409).json({ success: false, error: { code: 'BUSY', message: 'Live Report scheduler is already executing' } });
+  }
+  const recapType = req.body?.recapType as 'daily' | 'weekly' | 'monthly' | undefined;
+  const accountId = req.body?.accountId ? Number(req.body.accountId) : undefined;
+  livereportScheduler.runNow(recapType, accountId).catch(e => logger.error(`[LiveReport] runNow error: ${e}`));
+  const msg = accountId ? `Live Report triggered for account #${accountId}` : 'Live Report triggered, running in background';
+  res.json({ success: true, message: msg });
+}));
+
+// --- Name Mapping Upload (Excel) ---
+
+router.post('/livereport-namemapping/upload', asyncHandler(async (req, res) => {
+  if (!req.files || !req.files.file) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'No file uploaded' } });
+  }
+
+  const file = req.files.file as any;
+  if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Only .xlsx files accepted' } });
+  }
+
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    if (file.tempFilePath) {
+      await wb.xlsx.readFile(file.tempFilePath);
+    } else {
+      await wb.xlsx.load(file.data);
+    }
+
+    const ws = wb.worksheets[0];
+    if (!ws) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'No worksheet found' } });
+    }
+
+    // Load existing mapping to merge
+    const existing = await prisma.setting.findUnique({ where: { key: 'livereport.nameMapping' } });
+    let mapping: Record<string, string> = {};
+    try { mapping = JSON.parse(existing?.value || '{}'); } catch { }
+
+    let imported = 0;
+    ws.eachRow((row: any) => {
+      const realName = String(row.getCell(1).value || '').trim();
+      const username = String(row.getCell(2).value || '').trim().toLowerCase();
+      if (realName && username) {
+        mapping[username] = realName;
+        imported++;
+      }
+    });
+
+    await prisma.setting.upsert({
+      where: { key: 'livereport.nameMapping' },
+      update: { value: JSON.stringify(mapping) },
+      create: { key: 'livereport.nameMapping', value: JSON.stringify(mapping), type: 'json' },
+    });
+
+    res.json({ success: true, data: { imported, total: Object.keys(mapping).length } });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ success: false, error: { code: 'PARSE_ERROR', message: `Failed to parse Excel: ${msg}` } });
+  }
+}));
+
+// --- GANTI NOMOR Telegram Listener Control ---
+
+router.post('/gantinomor-listener/start', asyncHandler(async (_req, res) => {
+  if (gantiNomorListener.isRunning()) {
+    return res.json({ success: true, message: 'GANTI NOMOR listener already running' });
+  }
+  await gantiNomorListener.start();
+  res.json({ success: true, message: 'GANTI NOMOR listener started' });
+}));
+
+router.post('/gantinomor-listener/stop', asyncHandler(async (_req, res) => {
+  gantiNomorListener.stop();
+  res.json({ success: true, message: 'GANTI NOMOR listener stopped' });
+}));
+
+router.get('/gantinomor-listener/status', asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: { running: gantiNomorListener.isRunning() } });
+}));
+
+// --- Provider NTO Live Report Scheduler Control ---
+
+const providerSchedulers: Record<string, typeof nukeLiveReportScheduler> = {
+  nuke: nukeLiveReportScheduler,
+  victory: victoryNtoScheduler,
+  pay4d: pay4dLiveReportScheduler,
+};
+
+for (const [key, scheduler] of Object.entries(providerSchedulers)) {
+  const prefix = `livereport-${key}-scheduler`;
+
+  router.post(`/${prefix}/start`, asyncHandler(async (_req, res) => {
+    if (scheduler.isRunning()) {
+      return res.json({ success: true, message: `${key.toUpperCase()} Live Report scheduler already running` });
+    }
+    scheduler.start();
+    res.json({ success: true, message: `${key.toUpperCase()} Live Report scheduler started` });
+  }));
+
+  router.post(`/${prefix}/stop`, asyncHandler(async (_req, res) => {
+    scheduler.stop();
+    res.json({ success: true, message: `${key.toUpperCase()} Live Report scheduler stopped` });
+  }));
+
+  router.get(`/${prefix}/status`, asyncHandler(async (_req, res) => {
+    const lastRunSetting = await prisma.setting.findUnique({ where: { key: `livereport.${key}.scheduler.lastRun` } });
+    let lastRun = null;
+    try { lastRun = lastRunSetting?.value ? JSON.parse(lastRunSetting.value) : null; } catch { /* ignore */ }
+
+    const intervalSetting = await prisma.setting.findUnique({ where: { key: `livereport.${key}.scheduler.interval` } });
+
+    res.json({
+      success: true,
+      data: {
+        running: scheduler.isRunning(),
+        executing: scheduler.isExecuting(),
+        lastRun,
+        intervalMinutes: parseInt(intervalSetting?.value || '60', 10),
+      },
+    });
+  }));
+
+  router.post(`/${prefix}/run-now`, asyncHandler(async (_req, res) => {
+    if (scheduler.isExecuting()) {
+      return res.status(409).json({ success: false, error: { code: 'BUSY', message: `${key.toUpperCase()} scheduler is already executing` } });
+    }
+    scheduler.runNow().catch(e => logger.error(`[LiveReport-${key.toUpperCase()}] runNow error: ${e}`));
+    res.json({ success: true, message: `${key.toUpperCase()} Live Report triggered, running in background` });
+  }));
+}
 
 // --- 2Captcha Balance ---
 
