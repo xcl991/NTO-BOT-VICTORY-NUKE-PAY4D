@@ -6,7 +6,7 @@
 ; ============================================
 
 #define MyAppName "NTO BOT"
-#define MyAppVersion "1.8.1"
+#define MyAppVersion "1.9.0"
 #define MyAppPublisher "NTO BOT"
 #define MyAppURL "http://localhost:6969"
 #define MyAppExeName "start.vbs"
@@ -22,14 +22,14 @@ DefaultDirName={sd}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer\output
-OutputBaseFilename=NTO-BOT-Setup-v1.8.1
+OutputBaseFilename=NTO-BOT-Setup-v1.9.0
 SetupIconFile=installer\nto-bot.ico
 UninstallDisplayIcon={app}\nto-bot.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-VersionInfoVersion=1.8.1
+VersionInfoVersion=1.9.0
 VersionInfoCompany=NTO BOT
 VersionInfoDescription=NTO BOT Automation Dashboard Installer
 VersionInfoProductName=NTO BOT
