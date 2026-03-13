@@ -62,11 +62,11 @@
 │   │   │       ├── tarikdb-scheduler.ts # TARIK DB H+1 daily scheduler (auto-check yesterday)
 │   │   │       ├── livereport-processor.ts # Live Report data processing, HTML table rendering, PNG export
 │   │   │       ├── livereport-scheduler.ts # ALEXIS17 Live Report scheduler (hourly + daily/weekly/monthly recap)
-│   │   │       ├── summary-performance-scheduler.ts # Unified Summary Performance scheduler (runs NUKE+VICTORY+PAY4D simultaneously, combined PNG report)
+│   │   │       ├── summary-performance-scheduler.ts # Unified Summary Performance scheduler (NUKE+VICTORY+PAY4D sequential, RAM-efficient, combined PNG report)
 │   │   │       ├── totp.ts             # Time-corrected TOTP generator (auto-syncs clock from server)
 │   │   │       ├── telegram.ts          # Telegram API (send message/document/photo)
-│   │   │       ├── telegram-listener.ts # Long-polling listener, NTO + TARIK DB command parsers, auto-start bot
-│   │   │       └── gantinomor-listener.ts # Separate Telegram listener for GANTI NOMOR commands
+│   │   │       ├── telegram-listener.ts # Unified long-polling listener: NTO + TARIK DB + GANTI NOMOR + Live Report commands, auto-start bot
+│   │   │       └── gantinomor-listener.ts # GANTI NOMOR parser/processor functions (listener class removed in v1.9.0, handled by unified telegram-listener)
 │   │   └── utils/
 │   │       ├── errors.ts      # ApiError, ValidationError, asyncHandler, errorHandler
 │   │       ├── logger.ts      # Winston + daily rotate (data/logs/)
@@ -230,7 +230,7 @@
 - ALEXIS17 Live Report username parsing is prefix-dynamic: any upline prefix works (not just `teammkt`/`teamreborn`)
 - ALEXIS17 Live Report scrapes by-referral + by-company, combined into 1 PNG (team table + company table below)
 - ALEXIS17 Live Report supports "Nama" column via `livereport.nameMapping` setting (JSON: `{username: realName}`)
-- Summary Performance: unified scheduler runs all providers (NUKE, VICTORY, PAY4D) simultaneously, outputs combined horizontal PNG report
+- Summary Performance: unified scheduler runs all providers (NUKE, VICTORY, PAY4D) sequentially, outputs combined horizontal PNG report
   - Single `UnifiedSPScheduler` class (was 3 separate per-provider schedulers)
   - NUKE: scrapes `/report/summary-performance` page (today vs yesterday, 14 columns → DP Count + DP Amount + NTO)
   - VICTORY: scrapes `/report/report-profit-loss/by-company` page (today vs yesterday, DP Count + DP Amount + Valid Bet)
@@ -316,16 +316,13 @@
   - Panel: `SP_PROVIDERS` constant, `spAccounts` state, `SP_` UID prefix
   - Scheduler account picker loads `SUMMARYPERFORMANCE` accounts (was `NTO`)
   - Sidebar: SUMMARY PERFORMANCE group now has 6 items (3 account pages + 3 scheduler pages)
-- **Summary Performance Rename** — provider NTO schedulers renamed from `livereport.*` to `summaryperformance.*`
-  - File renamed: `provider-livereport-scheduler.ts` → `summary-performance-scheduler.ts`
-  - Class renamed: `ProviderLiveReportScheduler` → `SummaryPerformanceScheduler`
-  - Exports renamed: `nukeSPScheduler`, `victorySPScheduler`, `pay4dSPScheduler`
-  - DB setting keys: `summaryperformance.{nuke|victory|pay4d}.scheduler.*` (was `livereport.*`)
-  - API routes: `/api/settings/sp-{nuke|victory|pay4d}-scheduler/*` (was `livereport-*`)
-  - Panel section IDs: `sp-nuke`, `sp-victory`, `sp-pay4d` (was `livereport-*`)
+- **Summary Performance Rewrite** — `provider-livereport-scheduler.ts` (3 per-provider schedulers) replaced by `summary-performance-scheduler.ts` (1 unified `UnifiedSPScheduler`)
+  - Class: `ProviderLiveReportScheduler` × 3 → `UnifiedSPScheduler` × 1
+  - DB setting keys: `summaryperformance.scheduler.{enabled|interval}` (unified) + `summaryperformance.{nuke|victory|pay4d}.scheduler.accountIds` (per-provider)
+  - API routes: `/api/settings/sp-scheduler/*` (was `sp-{nuke|victory|pay4d}-scheduler/*`)
+  - Panel: unified scheduler page with 3 provider account pickers (was 3 separate scheduler pages)
   - Panel element IDs: `sp-*` prefix (was `plr-*`)
-  - Panel functions: `loadSummaryPerformance()`, `saveSPSettings()`, etc.
-  - Log prefix: `[SP-NUKE]`, `[SP-VICTORY]`, `[SP-PAY4D]` (was `[LiveReport-*]`)
+  - Log prefix: `[SP]` (was `[SP-NUKE]`, `[SP-VICTORY]`, `[SP-PAY4D]`)
 - **NUKE Summary Performance Flow** — dedicated scraping of `/report/summary-performance` page
   - New flow: `nuke-summary-performance-flow.ts` — navigates to SP page, scrapes 14-column Ant Design table
   - Scrapes both today and yesterday rows in single page load (date range: yesterday → today)
@@ -376,7 +373,7 @@
   - Acknowledgment message sent before execution starts
 - **Unified SP Scheduler** — merged 3 per-provider SP schedulers into 1 unified scheduler
   - Single `UnifiedSPScheduler` class replaces `nukeSPScheduler`, `victorySPScheduler`, `pay4dSPScheduler`
-  - Runs all providers simultaneously in single execution cycle
+  - Runs all providers sequentially in single execution cycle (RAM-efficient)
   - Combined horizontal PNG report: 1 row per account, provider-colored (NUKE blue, VICTORY green, PAY4D orange)
   - Columns: Provider | Account | DP Count (Kemarin/Hari Ini) | DP Amount (Kemarin/Hari Ini) | NTO/Valid Bet (Kemarin/Hari Ini) + TOTAL row
   - Diff arrows: ▲ green for increase, ▼ red for decrease
